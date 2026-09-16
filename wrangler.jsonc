@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ministerio-louvor",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-31",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "louvor-db",
+      "database_id": "b3205ce2-14d6-4b9f-b93f-02457fb34c62",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

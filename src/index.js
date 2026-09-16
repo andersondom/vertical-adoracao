@@ -1,0 +1,609 @@
+const SESSION_COOKIE = "louvor_session";
+const SESSION_DAYS = 30;
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    try {
+      if (url.pathname.startsWith("/api/")) {
+        return await handleApi(request, env, url);
+      }
+
+      if (url.pathname === "/logout") {
+        return await logout(request, env);
+      }
+
+      return htmlResponse(appHtml());
+    } catch (error) {
+      console.error(error);
+      return json({ error: "Erro interno do servidor." }, 500);
+    }
+  }
+};
+
+async function handleApi(request, env, url) {
+  if (url.pathname === "/api/bootstrap-status" && request.method === "GET") {
+    const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM users").first();
+    return json({ needsBootstrap: Number(row?.total || 0) === 0 });
+  }
+
+  if (url.pathname === "/api/bootstrap" && request.method === "POST") {
+    const count = await env.DB.prepare("SELECT COUNT(*) AS total FROM users").first();
+    if (Number(count?.total || 0) !== 0) return json({ error: "Administrador inicial já configurado." }, 409);
+
+    const body = await request.json();
+    const name = String(body.name || "").trim();
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "");
+
+    if (!name || !isEmail(email) || password.length < 8) {
+      return json({ error: "Informe nome, e-mail válido e senha com pelo menos 8 caracteres." }, 400);
+    }
+
+    const { hash, salt } = await hashPassword(password);
+    const result = await env.DB.prepare(
+      "INSERT INTO users(name,email,password_hash,password_salt,role) VALUES(?,?,?,?, 'admin')"
+    ).bind(name, email, hash, salt).run();
+
+    const userId = result.meta.last_row_id;
+    await logAudit(env, userId, "BOOTSTRAP_ADMIN", email);
+    return await createSessionResponse(env, userId, { ok: true });
+  }
+
+  if (url.pathname === "/api/login" && request.method === "POST") {
+    const body = await request.json();
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "");
+
+    const user = await env.DB.prepare(
+      "SELECT id,name,email,password_hash,password_salt,role,active FROM users WHERE email = ?"
+    ).bind(email).first();
+
+    if (!user || !user.active) return json({ error: "E-mail ou senha inválidos." }, 401);
+
+    const valid = await verifyPassword(password, user.password_hash, user.password_salt);
+    if (!valid) return json({ error: "E-mail ou senha inválidos." }, 401);
+
+    await logAudit(env, user.id, "LOGIN", user.email);
+    return await createSessionResponse(env, user.id, { ok: true });
+  }
+
+  const auth = await getAuth(request, env);
+  if (!auth) return json({ error: "Não autenticado." }, 401);
+
+  if (url.pathname === "/api/me" && request.method === "GET") {
+    return json({ user: auth.user });
+  }
+
+  if (url.pathname === "/api/data" && request.method === "GET") {
+    return await getData(env, auth.user);
+  }
+
+  if (url.pathname === "/api/availability" && request.method === "POST") {
+    const settings = await env.DB.prepare("SELECT availability_open FROM schedule_settings WHERE id=1").first();
+    if (!settings?.availability_open && auth.user.role !== "admin") {
+      return json({ error: "O período de disponibilidade está fechado." }, 403);
+    }
+
+    const body = await request.json();
+    const eventId = Number(body.eventId);
+    const available = body.available ? 1 : 0;
+    const targetUserId = auth.user.role === "admin" && body.userId ? Number(body.userId) : auth.user.id;
+
+    if (auth.user.role !== "admin" && targetUserId !== auth.user.id) {
+      return json({ error: "Acesso negado." }, 403);
+    }
+
+    if (available) {
+      await env.DB.prepare(
+        `INSERT INTO availability(event_id,user_id,available,updated_at)
+         VALUES(?,?,1,CURRENT_TIMESTAMP)
+         ON CONFLICT(event_id,user_id)
+         DO UPDATE SET available=1,updated_at=CURRENT_TIMESTAMP`
+      ).bind(eventId, targetUserId).run();
+    } else {
+      await env.DB.prepare("DELETE FROM availability WHERE event_id=? AND user_id=?")
+        .bind(eventId, targetUserId).run();
+    }
+
+    await logAudit(env, auth.user.id, "AVAILABILITY_UPDATE", JSON.stringify({eventId,targetUserId,available}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/assign" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    const eventId = Number(body.eventId);
+    const userId = body.userId ? Number(body.userId) : null;
+
+    if (userId) {
+      await env.DB.prepare(
+        `INSERT INTO assignments(event_id,user_id,updated_at)
+         VALUES(?,?,CURRENT_TIMESTAMP)
+         ON CONFLICT(event_id)
+         DO UPDATE SET user_id=excluded.user_id, updated_at=CURRENT_TIMESTAMP`
+      ).bind(eventId, userId).run();
+    } else {
+      await env.DB.prepare("DELETE FROM assignments WHERE event_id=?").bind(eventId).run();
+    }
+
+    await logAudit(env, auth.user.id, "ASSIGNMENT_UPDATE", JSON.stringify({eventId,userId}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/users" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    const name = String(body.name || "").trim();
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "");
+    const role = body.role === "admin" ? "admin" : "member";
+
+    if (!name || !isEmail(email) || password.length < 8) {
+      return json({ error: "Nome, e-mail válido e senha mínima de 8 caracteres são obrigatórios." }, 400);
+    }
+
+    const exists = await env.DB.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
+    if (exists) return json({ error: "Já existe um usuário com esse e-mail." }, 409);
+
+    const { hash, salt } = await hashPassword(password);
+    const result = await env.DB.prepare(
+      "INSERT INTO users(name,email,password_hash,password_salt,role) VALUES(?,?,?,?,?)"
+    ).bind(name,email,hash,salt,role).run();
+
+    await logAudit(env, auth.user.id, "USER_CREATE", JSON.stringify({id: result.meta.last_row_id,email,role}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/user-state" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    const userId = Number(body.userId);
+    const active = body.active ? 1 : 0;
+
+    if (userId === auth.user.id && !active) return json({ error: "Você não pode desativar sua própria conta." }, 400);
+
+    await env.DB.prepare("UPDATE users SET active=? WHERE id=?").bind(active,userId).run();
+    if (!active) await env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(userId).run();
+    await logAudit(env, auth.user.id, "USER_STATE", JSON.stringify({userId,active}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/password" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    const userId = Number(body.userId);
+    const password = String(body.password || "");
+    if (password.length < 8) return json({ error: "A nova senha deve ter pelo menos 8 caracteres." }, 400);
+
+    const { hash, salt } = await hashPassword(password);
+    await env.DB.prepare(
+      "UPDATE users SET password_hash=?, password_salt=? WHERE id=?"
+    ).bind(hash,salt,userId).run();
+    await env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(userId).run();
+    await logAudit(env, auth.user.id, "PASSWORD_RESET_BY_ADMIN", String(userId));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/settings" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    const open = body.availabilityOpen ? 1 : 0;
+    await env.DB.prepare("UPDATE schedule_settings SET availability_open=? WHERE id=1").bind(open).run();
+    await logAudit(env, auth.user.id, "AVAILABILITY_WINDOW", String(open));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/event" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    const eventDate = String(body.eventDate || "");
+    const dayCode = String(body.dayCode || "").trim();
+    const title = String(body.title || "").trim() || null;
+    const icon = String(body.icon || "🎶").trim() || "🎶";
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !dayCode) {
+      return json({ error: "Data e código do dia são obrigatórios." }, 400);
+    }
+
+    await env.DB.prepare(
+      "INSERT INTO events(event_date,day_code,title,icon) VALUES(?,?,?,?)"
+    ).bind(eventDate,dayCode,title,icon).run();
+    await logAudit(env, auth.user.id, "EVENT_CREATE", JSON.stringify({eventDate,dayCode,title}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/logout" && request.method === "POST") {
+    return await logout(request, env);
+  }
+
+  return json({ error: "Rota não encontrada." }, 404);
+}
+
+async function getData(env, user) {
+  const settings = await env.DB.prepare(
+    "SELECT month_label,availability_open FROM schedule_settings WHERE id=1"
+  ).first();
+
+  const events = await env.DB.prepare(
+    `SELECT e.id,e.event_date,e.day_code,e.title,e.icon,
+            a.user_id AS assigned_user_id,u.name AS assigned_name
+     FROM events e
+     LEFT JOIN assignments a ON a.event_id=e.id
+     LEFT JOIN users u ON u.id=a.user_id
+     ORDER BY e.event_date`
+  ).all();
+
+  const ownAvailability = await env.DB.prepare(
+    "SELECT event_id,available FROM availability WHERE user_id=?"
+  ).bind(user.id).all();
+
+  let members = [];
+  let allAvailability = [];
+
+  if (user.role === "admin") {
+    members = (await env.DB.prepare(
+      "SELECT id,name,email,role,active FROM users ORDER BY name"
+    ).all()).results;
+
+    allAvailability = (await env.DB.prepare(
+      `SELECT av.event_id,av.user_id,av.available,u.name
+       FROM availability av
+       JOIN users u ON u.id=av.user_id
+       WHERE av.available=1
+       ORDER BY u.name`
+    ).all()).results;
+  }
+
+  return json({
+    settings,
+    events: events.results,
+    ownAvailability: ownAvailability.results,
+    members,
+    allAvailability
+  });
+}
+
+function requireAdmin(auth) {
+  if (auth.user.role !== "admin") {
+    const err = new Error("Acesso negado.");
+    err.status = 403;
+    throw err;
+  }
+}
+
+async function logout(request, env) {
+  const cookies = parseCookies(request.headers.get("Cookie") || "");
+  const sessionId = cookies[SESSION_COOKIE];
+  if (sessionId) await env.DB.prepare("DELETE FROM sessions WHERE id=?").bind(sessionId).run();
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "Location": "/",
+      "Set-Cookie": `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+    }
+  });
+}
+
+async function getAuth(request, env) {
+  const cookies = parseCookies(request.headers.get("Cookie") || "");
+  const sessionId = cookies[SESSION_COOKIE];
+  if (!sessionId) return null;
+
+  const row = await env.DB.prepare(
+    `SELECT s.id AS session_id,s.expires_at,
+            u.id,u.name,u.email,u.role,u.active
+     FROM sessions s
+     JOIN users u ON u.id=s.user_id
+     WHERE s.id=?`
+  ).bind(sessionId).first();
+
+  if (!row || !row.active || new Date(row.expires_at) <= new Date()) {
+    if (sessionId) await env.DB.prepare("DELETE FROM sessions WHERE id=?").bind(sessionId).run();
+    return null;
+  }
+
+  return {
+    user: {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      role: row.role
+    }
+  };
+}
+
+async function createSessionResponse(env, userId, payload) {
+  const sessionId = randomToken(32);
+  const expires = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
+
+  await env.DB.prepare(
+    "INSERT INTO sessions(id,user_id,expires_at) VALUES(?,?,?)"
+  ).bind(sessionId,userId,expires).run();
+
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "Set-Cookie": `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS*86400}`
+    }
+  });
+}
+
+async function hashPassword(password, saltB64 = null) {
+  const enc = new TextEncoder();
+  const salt = saltB64 ? fromB64(saltB64) : crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name:"PBKDF2", salt, iterations:210000, hash:"SHA-256" },
+    key,
+    256
+  );
+  return { hash: toB64(new Uint8Array(bits)), salt: toB64(salt) };
+}
+
+async function verifyPassword(password, expectedHash, salt) {
+  const { hash } = await hashPassword(password, salt);
+  return timingSafeEqual(hash, expectedHash);
+}
+
+function timingSafeEqual(a,b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i=0;i<a.length;i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function randomToken(bytes=32) {
+  return toB64(crypto.getRandomValues(new Uint8Array(bytes)))
+    .replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+}
+
+function toB64(bytes) {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s);
+}
+
+function fromB64(s) {
+  const bin = atob(s);
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+
+function parseCookies(header) {
+  return Object.fromEntries(header.split(";").map(v=>v.trim()).filter(Boolean).map(v=>{
+    const i=v.indexOf("="); return [v.slice(0,i), decodeURIComponent(v.slice(i+1))];
+  }));
+}
+
+function normalizeEmail(v) { return String(v || "").trim().toLowerCase(); }
+function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+async function logAudit(env, actorUserId, action, details="") {
+  await env.DB.prepare(
+    "INSERT INTO audit_log(actor_user_id,action,details) VALUES(?,?,?)"
+  ).bind(actorUserId || null,action,String(details || "")).run();
+}
+
+function json(data, status=200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {"content-type":"application/json; charset=utf-8"}
+  });
+}
+
+function htmlResponse(html) {
+  return new Response(html, {
+    headers: {"content-type":"text/html; charset=utf-8"}
+  });
+}
+
+function appHtml() {
+return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ministério de Louvor</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f5f6f8;color:#20242a}
+header{background:#111827;color:white;padding:16px}.wrap{max-width:1000px;margin:auto;padding:16px}
+.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin:12px 0;box-shadow:0 2px 10px rgba(0,0,0,.03)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.grid{display:grid;gap:12px}.g2{grid-template-columns:1fr 1fr}
+button{border:0;border-radius:10px;padding:10px 14px;background:#111827;color:white;cursor:pointer}button.alt{background:#e5e7eb;color:#111827}button.danger{background:#991b1b}
+input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:10px;margin-top:5px}label{font-weight:700;font-size:14px}
+.muted{color:#6b7280;font-size:14px}.title{font-weight:800;font-size:18px}.hidden{display:none}.ok{color:#166534}.err{color:#991b1b}
+.tag{padding:4px 8px;background:#eef2ff;border-radius:999px;font-size:12px}.avail{margin-top:8px;padding:8px;background:#f9fafb;border-radius:8px}
+.smallbtn{padding:6px 9px;font-size:12px}.checkbox{width:auto}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+@media(max-width:700px){.g2{grid-template-columns:1fr}.wrap{padding:12px}}
+</style>
+</head>
+<body>
+<header><div class="wrap row"><strong>🎶 Ministério de Louvor</strong><div id="topUser"></div></div></header>
+<main class="wrap">
+<section id="loading" class="card">Carregando...</section>
+
+<section id="bootstrap" class="card hidden">
+<h1>👑 Primeiro acesso</h1>
+<p class="muted">Crie a conta do administrador inicial. Esta tela desaparece depois da primeira conta.</p>
+<div class="grid g2">
+<div><label>Nome<input id="bName" placeholder="Pr Anderson"></label></div>
+<div><label>E-mail<input id="bEmail" type="email"></label></div>
+<div><label>Senha<input id="bPass" type="password" minlength="8"></label></div>
+</div><br>
+<button onclick="bootstrap()">Criar administrador</button>
+<p id="bMsg"></p>
+</section>
+
+<section id="login" class="card hidden" style="max-width:520px;margin:30px auto">
+<h1>🔐 Entrar</h1>
+<p class="muted">Use seu e-mail e sua senha individual.</p>
+<label>E-mail<input id="email" type="email" autocomplete="email"></label><br><br>
+<label>Senha<input id="pass" type="password" autocomplete="current-password"></label><br><br>
+<button onclick="login()">Entrar</button>
+<p id="loginMsg"></p>
+</section>
+
+<section id="app" class="hidden">
+<div class="card row"><div><h1 id="month" style="margin:0"></h1><div id="welcome" class="muted"></div></div><div class="row"><span id="roleTag" class="tag"></span><button class="alt" onclick="logout()">Sair</button></div></div>
+<div id="adminTabs" class="tabs hidden">
+<button onclick="showView('schedule')">📅 Escala</button>
+<button onclick="showView('users')">👥 Integrantes</button>
+<button onclick="showView('settings')">⚙️ Configurações</button>
+</div>
+<div id="scheduleView"></div>
+<div id="usersView" class="hidden"></div>
+<div id="settingsView" class="hidden"></div>
+</section>
+</main>
+
+<script>
+let ME=null, DATA=null;
+
+async function api(path, options={}){
+  const r=await fetch(path,{headers:{'content-type':'application/json',...(options.headers||{})},...options});
+  const text=await r.text(); let data={}; try{data=text?JSON.parse(text):{}}catch{}
+  if(!r.ok) throw new Error(data.error||'Erro na operação.');
+  return data;
+}
+
+async function init(){
+  try{
+    const status=await api('/api/bootstrap-status');
+    if(status.needsBootstrap){ hide('loading'); show('bootstrap'); return; }
+    try{
+      const me=await api('/api/me'); ME=me.user; await loadApp();
+    }catch{ hide('loading'); show('login'); }
+  }catch(e){ document.getElementById('loading').innerText=e.message; }
+}
+
+async function bootstrap(){
+  const msg=id('bMsg'); msg.textContent='Criando...'; msg.className='';
+  try{
+    await api('/api/bootstrap',{method:'POST',body:JSON.stringify({name:val('bName'),email:val('bEmail'),password:val('bPass')})});
+    ME=(await api('/api/me')).user; hide('bootstrap'); await loadApp();
+  }catch(e){msg.textContent=e.message;msg.className='err'}
+}
+
+async function login(){
+  const msg=id('loginMsg'); msg.textContent='Entrando...'; msg.className='';
+  try{
+    await api('/api/login',{method:'POST',body:JSON.stringify({email:val('email'),password:val('pass')})});
+    ME=(await api('/api/me')).user; hide('login'); await loadApp();
+  }catch(e){msg.textContent=e.message;msg.className='err'}
+}
+
+async function logout(){
+  await fetch('/api/logout',{method:'POST'}); location.reload();
+}
+
+async function loadApp(){
+  DATA=await api('/api/data'); hide('loading'); hide('login'); show('app');
+  id('month').textContent=DATA.settings.month_label;
+  id('welcome').textContent='Olá, '+ME.name+'.';
+  id('roleTag').textContent=ME.role==='admin'?'Administrador':'Integrante';
+  id('topUser').textContent=ME.name;
+  if(ME.role==='admin') show('adminTabs');
+  renderSchedule();
+  if(ME.role==='admin'){renderUsers();renderSettings();}
+}
+
+function renderSchedule(){
+  const own=new Set(DATA.ownAvailability.filter(x=>x.available).map(x=>Number(x.event_id)));
+  let html='';
+  for(const e of DATA.events){
+    const available=(DATA.allAvailability||[]).filter(a=>Number(a.event_id)===Number(e.id));
+    html+=\`<article class="card">
+      <div class="row">
+       <div><div class="title">\${esc(e.icon)} \${e.event_date.slice(8,10)} – \${esc(e.day_code)} –</div>
+       \${e.title?'<div><strong>'+esc(e.title)+'</strong></div>':''}
+       <div class="muted">\${e.assigned_name?'✅ Escalado: '+esc(e.assigned_name):'⚪ Sem responsável definido'}</div></div>
+       <label style="font-weight:500"><input class="checkbox" type="checkbox" \${own.has(Number(e.id))?'checked':''} \${(!DATA.settings.availability_open&&ME.role!=='admin')?'disabled':''}
+       onchange="setAvailability(\${e.id},this.checked)"> Estou disponível</label>
+      </div>\`;
+    if(ME.role==='admin'){
+      html+=\`<div class="avail"><strong>Disponíveis:</strong> \${available.length?available.map(a=>esc(a.name)).join(', '):'ninguém marcou'}</div>
+      <div style="margin-top:10px"><label>Responsável oficial
+       <select onchange="assign(\${e.id},this.value)">
+        <option value="">— Não definido —</option>
+        \${DATA.members.filter(m=>m.active).map(m=>\`<option value="\${m.id}" \${Number(e.assigned_user_id)===Number(m.id)?'selected':''}>\${esc(m.name)}</option>\`).join('')}
+       </select></label></div>\`;
+    }
+    html+='</article>';
+  }
+  id('scheduleView').innerHTML=html;
+}
+
+async function setAvailability(eventId, available){
+  try{ await api('/api/availability',{method:'POST',body:JSON.stringify({eventId,available})}); await reloadData(); }
+  catch(e){alert(e.message);await reloadData();}
+}
+
+async function assign(eventId,userId){
+  try{await api('/api/admin/assign',{method:'POST',body:JSON.stringify({eventId,userId:userId||null})});await reloadData()}
+  catch(e){alert(e.message)}
+}
+
+function renderUsers(){
+  id('usersView').innerHTML=\`
+  <div class="card"><h2>👥 Cadastrar integrante</h2>
+  <div class="grid g2">
+   <label>Nome<input id="uName"></label><label>E-mail<input id="uEmail" type="email"></label>
+   <label>Senha inicial<input id="uPass" type="password" minlength="8"></label>
+   <label>Perfil<select id="uRole"><option value="member">Integrante</option><option value="admin">Administrador</option></select></label>
+  </div><br><button onclick="createUser()">Cadastrar</button><p id="uMsg"></p></div>
+  \${DATA.members.map(u=>\`<div class="card row"><div><strong>\${esc(u.name)}</strong><div class="muted">\${esc(u.email)} · \${u.role==='admin'?'Administrador':'Integrante'} · \${u.active?'Ativo':'Desativado'}</div></div><div class="row">
+  <button class="smallbtn alt" onclick="resetPass(\${u.id})">Alterar senha</button>
+  <button class="smallbtn \${u.active?'danger':'alt'}" onclick="toggleUser(\${u.id},\${u.active?0:1})">\${u.active?'Desativar':'Ativar'}</button>
+  </div></div>\`).join('')}\`;
+}
+
+async function createUser(){
+  const msg=id('uMsg');msg.textContent='';
+  try{
+    await api('/api/admin/users',{method:'POST',body:JSON.stringify({name:val('uName'),email:val('uEmail'),password:val('uPass'),role:val('uRole')})});
+    msg.textContent='Integrante cadastrado.';msg.className='ok';await reloadData();
+  }catch(e){msg.textContent=e.message;msg.className='err'}
+}
+async function toggleUser(userId,active){
+  try{await api('/api/admin/user-state',{method:'POST',body:JSON.stringify({userId,active:!!active})});await reloadData()}
+  catch(e){alert(e.message)}
+}
+async function resetPass(userId){
+  const p=prompt('Digite a nova senha (mínimo 8 caracteres):'); if(!p)return;
+  try{await api('/api/admin/password',{method:'POST',body:JSON.stringify({userId,password:p})});alert('Senha alterada. O usuário precisará entrar novamente.')}
+  catch(e){alert(e.message)}
+}
+
+function renderSettings(){
+  id('settingsView').innerHTML=\`
+  <div class="card"><h2>⚙️ Disponibilidade</h2>
+  <p>Estado atual: <strong>\${DATA.settings.availability_open?'ABERTA':'FECHADA'}</strong></p>
+  <button onclick="toggleWindow(\${DATA.settings.availability_open?0:1})">\${DATA.settings.availability_open?'Fechar período':'Reabrir período'}</button>
+  </div>
+  <div class="card"><h2>➕ Novo evento</h2>
+  <div class="grid g2"><label>Data<input id="eDate" type="date"></label><label>Código do dia<input id="eDay" placeholder="Q, S, D, Sx"></label><label>Título<input id="eTitle"></label><label>Emoji<input id="eIcon" value="🎶"></label></div><br>
+  <button onclick="createEvent()">Adicionar evento</button><p id="eMsg"></p></div>\`;
+}
+async function toggleWindow(open){
+  await api('/api/admin/settings',{method:'POST',body:JSON.stringify({availabilityOpen:!!open})});await reloadData();
+}
+async function createEvent(){
+  const msg=id('eMsg');msg.textContent='';
+  try{
+    await api('/api/admin/event',{method:'POST',body:JSON.stringify({eventDate:val('eDate'),dayCode:val('eDay'),title:val('eTitle'),icon:val('eIcon')})});
+    msg.textContent='Evento adicionado.';msg.className='ok';await reloadData();
+  }catch(e){msg.textContent=e.message;msg.className='err'}
+}
+
+async function reloadData(){DATA=await api('/api/data');renderSchedule();if(ME.role==='admin'){renderUsers();renderSettings();}}
+function showView(v){for(const x of ['schedule','users','settings']) id(x+'View').classList.toggle('hidden',x!==v)}
+function id(x){return document.getElementById(x)} function val(x){return id(x).value}
+function show(x){id(x).classList.remove('hidden')} function hide(x){id(x).classList.add('hidden')}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+init();
+</script>
+</body></html>`;
+}
