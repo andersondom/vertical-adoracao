@@ -1,3 +1,4 @@
+import { normalizeEmail, isEmail } from "./utils/validation.js";
 const SESSION_COOKIE = "louvor_session";
 const SESSION_DAYS = 30;
 
@@ -378,8 +379,6 @@ function parseCookies(header) {
   }));
 }
 
-function normalizeEmail(v) { return String(v || "").trim().toLowerCase(); }
-function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
 
 async function logAudit(env, actorUserId, action, details="") {
   await env.DB.prepare(
