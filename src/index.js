@@ -1,6 +1,8 @@
 import { normalizeEmail, isEmail } from "./utils/validation.js";
 import { hashPassword, verifyPassword } from "./auth/crypto.js";
 import { getAuth, createSessionResponse, logout } from "./auth/session.js";
+import { requireAdmin } from "./auth/authorization.js";
+import { json, htmlResponse } from "./utils/http.js";
 
 import { logAudit } from "./db/audit.js";
 import { getData } from "./db/schedule.js";
@@ -229,31 +231,16 @@ async function handleApi(request, env, url) {
   return json({ error: "Rota não encontrada." }, 404);
 }
 
-function requireAdmin(auth) {
-  if (auth.user.role !== "admin") {
-    const err = new Error("Acesso negado.");
-    err.status = 403;
-    throw err;
-  }
-}
 
 
 
 
 
 
-function json(data, status=200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {"content-type":"application/json; charset=utf-8"}
-  });
-}
 
-function htmlResponse(html) {
-  return new Response(html, {
-    headers: {"content-type":"text/html; charset=utf-8"}
-  });
-}
+
+
+
 
 function appHtml() {
 return `<!doctype html>
