@@ -1,4 +1,5 @@
 import { normalizeEmail, isEmail } from "./utils/validation.js";
+import { hashPassword, verifyPassword, randomToken } from "./auth/crypto.js";
 const SESSION_COOKIE = "louvor_session";
 const SESSION_DAYS = 30;
 
@@ -331,46 +332,6 @@ async function createSessionResponse(env, userId, payload) {
       "Set-Cookie": `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS*86400}`
     }
   });
-}
-
-async function hashPassword(password, saltB64 = null) {
-  const enc = new TextEncoder();
-  const salt = saltB64 ? fromB64(saltB64) : crypto.getRandomValues(new Uint8Array(16));
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name:"PBKDF2", salt, iterations:210000, hash:"SHA-256" },
-    key,
-    256
-  );
-  return { hash: toB64(new Uint8Array(bits)), salt: toB64(salt) };
-}
-
-async function verifyPassword(password, expectedHash, salt) {
-  const { hash } = await hashPassword(password, salt);
-  return timingSafeEqual(hash, expectedHash);
-}
-
-function timingSafeEqual(a,b) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i=0;i<a.length;i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-function randomToken(bytes=32) {
-  return toB64(crypto.getRandomValues(new Uint8Array(bytes)))
-    .replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
-}
-
-function toB64(bytes) {
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
-}
-
-function fromB64(s) {
-  const bin = atob(s);
-  return Uint8Array.from(bin, c => c.charCodeAt(0));
 }
 
 function parseCookies(header) {
