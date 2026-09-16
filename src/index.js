@@ -2,6 +2,7 @@ import { normalizeEmail, isEmail } from "./utils/validation.js";
 import { hashPassword, verifyPassword } from "./auth/crypto.js";
 import { getAuth, createSessionResponse, logout } from "./auth/session.js";
 
+import { logAudit } from "./db/audit.js";
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -283,12 +284,6 @@ function requireAdmin(auth) {
 
 
 
-
-async function logAudit(env, actorUserId, action, details="") {
-  await env.DB.prepare(
-    "INSERT INTO audit_log(actor_user_id,action,details) VALUES(?,?,?)"
-  ).bind(actorUserId || null,action,String(details || "")).run();
-}
 
 function json(data, status=200) {
   return new Response(JSON.stringify(data), {
