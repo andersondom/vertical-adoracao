@@ -1,5 +1,6 @@
 import { normalizeEmail, isEmail } from "./utils/validation.js";
 import { hashPassword, verifyPassword, randomToken } from "./auth/crypto.js";
+import { parseCookies } from "./auth/cookies.js";
 const SESSION_COOKIE = "louvor_session";
 const SESSION_DAYS = 30;
 
@@ -334,11 +335,6 @@ async function createSessionResponse(env, userId, payload) {
   });
 }
 
-function parseCookies(header) {
-  return Object.fromEntries(header.split(";").map(v=>v.trim()).filter(Boolean).map(v=>{
-    const i=v.indexOf("="); return [v.slice(0,i), decodeURIComponent(v.slice(i+1))];
-  }));
-}
 
 
 async function logAudit(env, actorUserId, action, details="") {
