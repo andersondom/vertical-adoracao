@@ -18,7 +18,12 @@ export default {
       return htmlResponse(appHtml());
     } catch (error) {
       console.error(error);
-      return json({ error: "Erro interno do servidor." }, 500);
+      const status = Number.isInteger(error?.status) ? error.status : 500;
+      const message = status < 500
+        ? error.message
+        : "Erro interno do servidor.";
+
+      return json({ error: message }, status);
     }
   }
 };
