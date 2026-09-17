@@ -1,48 +1,284 @@
-# Ministério de Louvor — Cloudflare Workers + D1
+# 🎶 Vertical Adoração
 
-Esta versão foi preparada para funcionar sem Supabase.
+Sistema web para **gestão de escalas e disponibilidade de integrantes de um Ministério de Louvor**, desenvolvido com arquitetura serverless utilizando **JavaScript, Cloudflare Workers e Cloudflare D1**.
 
-Arquitetura:
+O projeto permite organizar integrantes, disponibilidades e responsáveis por cada evento da escala, com autenticação individual e diferentes níveis de acesso para administradores e membros.
 
-- Cloudflare Worker: aplicação e API
-- Cloudflare D1: banco SQL baseado em SQLite
-- GitHub: código-fonte
-- Wrangler: desenvolvimento e publicação
-- Autenticação própria: e-mail + senha, com PBKDF2-SHA256
-- Sessões: cookie HttpOnly + Secure
+---
 
-## O que já está implementado
+## 🎯 Objetivo
 
-- primeiro acesso cria o administrador inicial;
+O Vertical Adoração foi desenvolvido para substituir processos manuais de organização de escalas por uma aplicação web simples, centralizada e acessível pelo navegador.
+
+Cada integrante pode informar sua própria disponibilidade, enquanto os administradores possuem recursos para gerenciar usuários, eventos, disponibilidades e responsáveis pela escala.
+
+---
+
+## ✨ Funcionalidades
+
+### 👤 Integrantes
+
 - login individual por e-mail e senha;
-- senha nunca é armazenada em texto;
-- administrador cadastra integrantes;
-- administrador pode criar outro administrador;
-- administrador pode desativar/reativar contas;
-- administrador pode redefinir senha;
-- integrante altera apenas a própria disponibilidade;
-- administrador vê a disponibilidade de todos;
-- administrador define o responsável oficial;
-- período de disponibilidade pode ser fechado/reaberto;
-- criação de novos eventos pela interface;
-- escala inicial de setembro de 2026;
-- registro básico de auditoria.
+- visualização da própria disponibilidade;
+- alteração da disponibilidade para cada evento;
+- acesso restrito às informações permitidas ao integrante.
+
+### 👑 Administradores
+
+- criação do administrador inicial no primeiro acesso;
+- cadastro de integrantes;
+- criação de outros administradores;
+- ativação e desativação de contas;
+- redefinição de senhas;
+- visualização das disponibilidades dos integrantes;
+- definição do responsável oficial por evento;
+- abertura e fechamento do período de disponibilidade;
+- criação de novos eventos;
+- registro de operações administrativas em log de auditoria.
+
+---
+
+## 🏗️ Arquitetura
+
+A aplicação utiliza uma arquitetura serverless.
+
+```text
+Navegador
+    │
+    ▼
+Cloudflare Worker
+    │
+    ├── Interface Web
+    │
+    ├── API
+    │
+    ├── Autenticação
+    │
+    └── Regras de autorização
+    │
+    ▼
+Cloudflare D1
+    │
+    ├── Usuários
+    ├── Sessões
+    ├── Eventos
+    ├── Disponibilidades
+    ├── Escalas
+    └── Auditoria
+```
+
+O Cloudflare Worker funciona como ponto de entrada da aplicação, atendendo tanto a interface web quanto as requisições da API.
+
+O Cloudflare D1 fornece a persistência SQL da aplicação.
+
+---
+
+## 📂 Organização do código
+
+```text
+src/
+├── index.js
+│
+├── api/
+│   └── router.js
+│
+├── auth/
+│   ├── authorization.js
+│   ├── cookies.js
+│   ├── crypto.js
+│   └── session.js
+│
+├── db/
+│   ├── audit.js
+│   └── schedule.js
+│
+├── utils/
+│   ├── http.js
+│   └── validation.js
+│
+└── web/
+    └── app.js
+
+tests/
+├── authorization.test.js
+├── crypto.test.js
+└── validation.test.js
+
+migrations/
+└── 0001_initial.sql
+```
+
+### Responsabilidades
+
+**`src/index.js`**
+
+Ponto de entrada do Cloudflare Worker.
+
+**`src/api/`**
+
+Rotas HTTP e operações disponibilizadas pela API.
+
+**`src/auth/`**
+
+Autenticação, autorização, cookies, sessões e processamento seguro de senhas.
+
+**`src/db/`**
+
+Consultas e operações relacionadas à persistência e auditoria.
+
+**`src/utils/`**
+
+Funções auxiliares de validação e respostas HTTP.
+
+**`src/web/`**
+
+Interface web entregue pelo Worker.
+
+**`tests/`**
+
+Testes automatizados dos componentes independentes da aplicação.
+
+---
+
+## 🛠️ Tecnologias
+
+- JavaScript
+- Node.js
+- Cloudflare Workers
+- Cloudflare D1
+- SQLite
+- Wrangler
+- HTML5
+- CSS3
+- Web Crypto API
+- Git
+- GitHub
+
+---
+
+## 🔐 Segurança
+
+A aplicação utiliza autenticação própria com armazenamento seguro das credenciais.
+
+### Senhas
+
+As senhas não são armazenadas em texto puro.
+
+O processamento utiliza:
+
+- PBKDF2;
+- SHA-256;
+- salt aleatório;
+- 210.000 iterações.
+
+### Sessões
+
+Cada autenticação cria um identificador aleatório de sessão armazenado no banco D1.
+
+O navegador recebe apenas o identificador através de cookie configurado com:
+
+```text
+HttpOnly
+Secure
+SameSite=Lax
+```
+
+### Autorização
+
+A aplicação possui controle de acesso baseado em função:
+
+```text
+admin
+member
+```
+
+Operações administrativas são protegidas no backend e não dependem apenas da interface apresentada ao usuário.
+
+### Auditoria
+
+Operações importantes são registradas na tabela de auditoria, permitindo manter histórico das principais ações administrativas.
+
+---
+
+## 🛡️ Validação da API
+
+A API realiza validações antes das operações no banco, incluindo:
+
+- validação de e-mail;
+- validação de IDs;
+- validação de datas;
+- verificação da existência de usuários;
+- verificação da existência de eventos;
+- bloqueio de operações sobre usuários desativados;
+- respostas HTTP adequadas para requisições inválidas ou recursos inexistentes.
+
+---
+
+## 🧪 Testes automatizados
+
+O projeto utiliza o test runner nativo do Node.js.
+
+Os testes atuais cobrem componentes como:
+
+- normalização e validação de e-mail;
+- validação de identificadores;
+- validação de datas;
+- autorização administrativa;
+- geração de hash de senha;
+- verificação de senha;
+- geração de tokens aleatórios.
+
+Para executar:
+
+```bash
+npm test
+```
+
+---
+
+## 🗄️ Banco de dados
+
+O sistema utiliza **Cloudflare D1**, banco SQL baseado em SQLite.
+
+A estrutura inicial contém:
+
+```text
+users
+sessions
+schedule_settings
+events
+availability
+assignments
+audit_log
+```
+
+As migrations ficam em:
+
+```text
+migrations/
+```
+
+---
+
+# 🚀 Executando o projeto
 
 ## 1. Instalar dependências
-
-No terminal do Codespaces:
 
 ```bash
 npm install
 ```
 
-## 2. Fazer login na Cloudflare
+---
+
+## 2. Autenticar no Cloudflare
 
 ```bash
 npx wrangler login
 ```
 
-O navegador abrirá para autorizar a conta.
+O navegador será aberto para autorização da conta.
+
+---
 
 ## 3. Criar o banco D1
 
@@ -50,103 +286,101 @@ O navegador abrirá para autorizar a conta.
 npx wrangler d1 create louvor-db
 ```
 
-O comando retornará algo semelhante a:
+O comando retornará informações semelhantes a:
 
 ```text
 database_name = "louvor-db"
 database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
 
-Copie o `database_id`.
-
-Abra `wrangler.jsonc` e substitua:
+Configure o identificador correspondente em:
 
 ```text
-SUBSTITUA_PELO_ID_DO_D1
+wrangler.jsonc
 ```
 
-pelo ID recebido.
+---
 
-## 4. Criar as tabelas
+## 4. Aplicar as migrations
 
-Banco remoto:
-
-```bash
-npm run db:remote
-```
-
-Para testar localmente:
+### Banco local
 
 ```bash
 npm run db:local
 ```
 
-## 5. Rodar no Codespaces
+### Banco remoto
+
+```bash
+npm run db:remote
+```
+
+---
+
+## 5. Executar localmente
 
 ```bash
 npm run dev
 ```
 
-Abra a porta indicada pelo Wrangler.
+Abra no navegador o endereço apresentado pelo Wrangler.
 
-No primeiro acesso aparecerá:
+No primeiro acesso, o sistema solicitará a criação do administrador inicial.
 
-```text
-👑 Primeiro acesso
-```
+A senha deve possuir pelo menos 8 caracteres.
 
-Cadastre o administrador inicial com nome, e-mail e senha.
+---
 
-A senha deve ter pelo menos 8 caracteres.
-
-## 6. Publicar gratuitamente
+## 6. Publicação
 
 ```bash
 npm run deploy
 ```
 
-Ao final, o Wrangler mostrará o endereço público do Worker, semelhante a:
+Após a publicação, o Wrangler apresentará o endereço público do Worker.
 
-```text
-https://ministerio-louvor.SEUSUBDOMINIO.workers.dev
-```
+---
 
-Esse é o link que poderá ser compartilhado no WhatsApp.
+## 📅 Dados iniciais
 
-## Segurança
+A migration inicial inclui uma escala demonstrativa referente a setembro de 2026.
 
-As senhas são processadas com PBKDF2-SHA256, salt aleatório e 210.000 iterações.
+Após o primeiro acesso, o administrador pode utilizar as áreas **Integrantes** e **Escala** para configurar os usuários e responsáveis pelos eventos.
 
-Cada login cria uma sessão aleatória armazenada no D1. O navegador recebe somente o ID da sessão em um cookie:
+---
 
-- HttpOnly
-- Secure
-- SameSite=Lax
+## 💰 Infraestrutura
 
-Integrantes não possuem endpoint para consultar as disponibilidades de terceiros.
+O projeto foi concebido para uma aplicação de pequeno porte utilizando a infraestrutura serverless da Cloudflare.
 
-Somente administradores recebem a lista completa de integrantes e disponibilidades.
+Os limites e condições da camada gratuita podem mudar, portanto devem ser consultados na documentação oficial da plataforma antes de uma implantação em produção.
 
-## Observação importante sobre custo
+---
 
-O projeto foi desenhado para permanecer dentro da camada gratuita do Cloudflare para um uso pequeno como uma escala de ministério. Antes de colocar dados reais, confira os limites atuais da conta Cloudflare e evite habilitar produtos pagos desnecessários.
+## 📌 Evolução arquitetural
 
-## Setembro de 2026
+A aplicação passou por um processo de refatoração para separar responsabilidades que anteriormente estavam concentradas no arquivo principal do Worker.
 
-A migração inicial já cria:
+A estrutura atual divide:
 
-- 02 – Q
-- 06 – D
-- 09 – Q
-- 12 – S – Rede Atos
-- 13 – D
-- 16 – Q
-- 19 – S
-- 20 – D
-- 23 – Q
-- 25 – Sx – Festa dos Tabernáculos
-- 26 – S – Festa dos Tabernáculos
-- 27 – D – Festa dos Tabernáculos
-- 30 – Q
+- roteamento da API;
+- autenticação;
+- autorização;
+- sessões;
+- criptografia;
+- acesso aos dados;
+- auditoria;
+- validações;
+- respostas HTTP;
+- interface web.
 
-Depois do primeiro login, use a área **Integrantes** para cadastrar as demais pessoas e a área **Escala** para selecionar os responsáveis.
+Essa organização facilita manutenção, testes e evolução futura do sistema.
+
+---
+
+## 👨‍💻 Autor
+
+**Anderson Domingos**
+
+Projeto desenvolvido como aplicação prática de desenvolvimento web, arquitetura serverless e organização de sistemas.
+
