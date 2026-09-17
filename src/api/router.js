@@ -1,4 +1,4 @@
-import { normalizeEmail, isEmail } from "../utils/validation.js";
+import { normalizeEmail, isEmail, isPositiveInteger, isValidDate } from "../utils/validation.js";
 import { hashPassword, verifyPassword } from "../auth/crypto.js";
 import { getAuth, createSessionResponse, logout } from "../auth/session.js";
 import { requireAdmin } from "../auth/authorization.js";
@@ -71,12 +71,40 @@ export async function handleApi(request, env, url) {
     }
 
     const body = await request.json();
+    if (!isPositiveInteger(body.eventId)) {
+      return json({ error: "Evento inválido." }, 400);
+    }
+
     const eventId = Number(body.eventId);
     const available = body.available ? 1 : 0;
-    const targetUserId = auth.user.role === "admin" && body.userId ? Number(body.userId) : auth.user.id;
 
-    if (auth.user.role !== "admin" && targetUserId !== auth.user.id) {
-      return json({ error: "Acesso negado." }, 403);
+    if (auth.user.role === "admin" && body.userId != null && !isPositiveInteger(body.userId)) {
+      return json({ error: "Usuário inválido." }, 400);
+    }
+
+    const targetUserId =
+      auth.user.role === "admin" && body.userId != null
+        ? Number(body.userId)
+        : auth.user.id;
+
+    const event = await env.DB.prepare(
+      "SELECT id FROM events WHERE id=?"
+    ).bind(eventId).first();
+
+    if (!event) {
+      return json({ error: "Evento não encontrado." }, 404);
+    }
+
+    const targetUser = await env.DB.prepare(
+      "SELECT id,active FROM users WHERE id=?"
+    ).bind(targetUserId).first();
+
+    if (!targetUser) {
+      return json({ error: "Usuário não encontrado." }, 404);
+    }
+
+    if (!targetUser.active) {
+      return json({ error: "O usuário está desativado." }, 400);
     }
 
     if (available) {
@@ -98,10 +126,39 @@ export async function handleApi(request, env, url) {
   if (url.pathname === "/api/admin/assign" && request.method === "POST") {
     requireAdmin(auth);
     const body = await request.json();
+    if (!isPositiveInteger(body.eventId)) {
+      return json({ error: "Evento inválido." }, 400);
+    }
+
+    if (body.userId != null && body.userId !== "" && !isPositiveInteger(body.userId)) {
+      return json({ error: "Usuário inválido." }, 400);
+    }
+
     const eventId = Number(body.eventId);
-    const userId = body.userId ? Number(body.userId) : null;
+    const userId = body.userId != null && body.userId !== ""
+      ? Number(body.userId)
+      : null;
+
+    const event = await env.DB.prepare(
+      "SELECT id FROM events WHERE id=?"
+    ).bind(eventId).first();
+
+    if (!event) {
+      return json({ error: "Evento não encontrado." }, 404);
+    }
 
     if (userId) {
+      const user = await env.DB.prepare(
+        "SELECT id,active FROM users WHERE id=?"
+      ).bind(userId).first();
+
+      if (!user) {
+        return json({ error: "Usuário não encontrado." }, 404);
+      }
+
+      if (!user.active) {
+        return json({ error: "O usuário está desativado." }, 400);
+      }
       await env.DB.prepare(
         `INSERT INTO assignments(event_id,user_id,updated_at)
          VALUES(?,?,CURRENT_TIMESTAMP)
@@ -143,10 +200,24 @@ export async function handleApi(request, env, url) {
   if (url.pathname === "/api/admin/user-state" && request.method === "POST") {
     requireAdmin(auth);
     const body = await request.json();
+    if (!isPositiveInteger(body.userId)) {
+      return json({ error: "Usuário inválido." }, 400);
+    }
+
     const userId = Number(body.userId);
     const active = body.active ? 1 : 0;
 
-    if (userId === auth.user.id && !active) return json({ error: "Você não pode desativar sua própria conta." }, 400);
+    if (userId === auth.user.id && !active) {
+      return json({ error: "Você não pode desativar sua própria conta." }, 400);
+    }
+
+    const user = await env.DB.prepare(
+      "SELECT id FROM users WHERE id=?"
+    ).bind(userId).first();
+
+    if (!user) {
+      return json({ error: "Usuário não encontrado." }, 404);
+    }
 
     await env.DB.prepare("UPDATE users SET active=? WHERE id=?").bind(active,userId).run();
     if (!active) await env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(userId).run();
@@ -157,9 +228,24 @@ export async function handleApi(request, env, url) {
   if (url.pathname === "/api/admin/password" && request.method === "POST") {
     requireAdmin(auth);
     const body = await request.json();
+    if (!isPositiveInteger(body.userId)) {
+      return json({ error: "Usuário inválido." }, 400);
+    }
+
     const userId = Number(body.userId);
     const password = String(body.password || "");
-    if (password.length < 8) return json({ error: "A nova senha deve ter pelo menos 8 caracteres." }, 400);
+
+    if (password.length < 8) {
+      return json({ error: "A nova senha deve ter pelo menos 8 caracteres." }, 400);
+    }
+
+    const user = await env.DB.prepare(
+      "SELECT id FROM users WHERE id=?"
+    ).bind(userId).first();
+
+    if (!user) {
+      return json({ error: "Usuário não encontrado." }, 404);
+    }
 
     const { hash, salt } = await hashPassword(password);
     await env.DB.prepare(
@@ -187,8 +273,8 @@ export async function handleApi(request, env, url) {
     const title = String(body.title || "").trim() || null;
     const icon = String(body.icon || "🎶").trim() || "🎶";
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !dayCode) {
-      return json({ error: "Data e código do dia são obrigatórios." }, 400);
+    if (!isValidDate(eventDate) || !dayCode) {
+      return json({ error: "Informe uma data válida e o código do dia." }, 400);
     }
 
     await env.DB.prepare(
