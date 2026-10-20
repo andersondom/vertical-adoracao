@@ -16,6 +16,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: node scripts/verify-staging-config.mjs
       - run: npm run db:local
       - run: npm run seed:local
       - run: npm test

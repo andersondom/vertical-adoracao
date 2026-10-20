@@ -22,4 +22,4 @@ O arquivo `wrangler.staging.example.jsonc` é um **exemplo não executável** at
 
 ## Pendências do Módulo 1
 
-Testes D1 local e de integração, dados sintéticos completos, rate limiting no login, controles de segurança adicionais e rastreabilidade de requisitos.
+O pipeline valida migrations e dados sintéticos em D1 local, permissões e isolamento da configuração de staging. Permanecem pendentes o provisionamento remoto de staging, testes funcionais completos, proteção administrativa da branch principal e validação de recuperação/backup. Ver docs/MODULO-1-CHECKLIST.md.
