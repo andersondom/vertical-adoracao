@@ -5,6 +5,7 @@ import { requireAdmin } from "../auth/authorization.js";
 import { json } from "../utils/http.js";
 import { logAudit } from "../db/audit.js";
 import { getData } from "../db/schedule.js";
+import { loginIdentityHash, isLoginBlocked, recordLoginFailure, clearLoginFailures } from "../auth/login-rate-limit.js";
 
 export async function handleApi(request, env, url) {
   if (url.pathname === "/api/bootstrap-status" && request.method === "GET") {
@@ -40,14 +41,25 @@ export async function handleApi(request, env, url) {
     const email = normalizeEmail(body.email);
     const password = String(body.password || "");
 
+    const rateKey = await loginIdentityHash(email, request.headers.get("CF-Connecting-IP") || "unknown");
+    if (await isLoginBlocked(env.DB, rateKey)) return json({ error: "Muitas tentativas. Tente novamente mais tarde." }, 429);
+
     const user = await env.DB.prepare(
       "SELECT id,name,email,password_hash,password_salt,role,active FROM users WHERE email = ?"
     ).bind(email).first();
 
-    if (!user || !user.active) return json({ error: "E-mail ou senha inválidos." }, 401);
+    if (!user || !user.active) {
+      await recordLoginFailure(env.DB, rateKey);
+      return json({ error: "E-mail ou senha inválidos." }, 401);
+    }
 
     const valid = await verifyPassword(password, user.password_hash, user.password_salt);
-    if (!valid) return json({ error: "E-mail ou senha inválidos." }, 401);
+    if (!valid) {
+      await recordLoginFailure(env.DB, rateKey);
+      return json({ error: "E-mail ou senha inválidos." }, 401);
+    }
+
+    await clearLoginFailures(env.DB, rateKey);
 
     await logAudit(env, user.id, "LOGIN", user.email);
     return await createSessionResponse(env, user.id, { ok: true });

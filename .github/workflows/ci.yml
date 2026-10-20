@@ -16,5 +16,9 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm run db:local
+      - run: npm run seed:local
       - run: npm test
+        env:
+          RUN_D1_INTEGRATION: '1'
       - run: npx wrangler deploy --dry-run --outdir /tmp/vertical-adoracao-build

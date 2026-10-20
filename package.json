@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 migrations apply louvor-db --local",
     "db:remote": "wrangler d1 migrations apply louvor-db --remote",
-    "test": "node --test"
+    "test": "node --test",
+    "seed:local": "wrangler d1 execute louvor-db --local --file scripts/seed-local.sql"
   },
   "devDependencies": {
     "wrangler": "^4.33.1"

@@ -45,3 +45,7 @@ npx wrangler deploy --dry-run
 ```
 
 O comando `npm run deploy` é reservado a publicação autorizada; `npm run db:remote` não deve ser executado sem identificar e autorizar o banco de destino.
+
+## Etapa 3 — Integração local e controle de tentativas
+
+Foram adicionados testes com D1 local, dados sintéticos e limitação de tentativas de login. A nova migration 0002 deve ser aplicada em staging antes de qualquer implantação; nenhuma operação D1 remota está incluída neste PR. Consulte docs/TESTES-LOCAIS.md.
