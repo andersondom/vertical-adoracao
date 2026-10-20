@@ -22,3 +22,7 @@
 Antes de qualquer merge ou implantação: CI verde, revisão do PR, migração 0002 validada em staging isolado, avaliação de segurança e autorização explícita do usuário.
 
 **O Módulo 1 não está homologado para produção enquanto existirem pendências acima.**
+
+## Correção de instabilidade CI
+
+Os testes que executam Wrangler D1 local compartilham um banco SQLite. A execução paralela de arquivos de teste pode provocar `SQLITE_BUSY`; por isso, `npm test` executa os arquivos sequencialmente (`--test-concurrency=1`). A correção não modifica o banco remoto.
