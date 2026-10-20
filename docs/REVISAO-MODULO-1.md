@@ -19,3 +19,13 @@ A verificação do pipeline é uma salvaguarda de configuração, não um mecani
 5. Recuperação de backups, rollback e proteção administrativa da branch principal ainda não foram homologados.
 
 **Estado:** PR permanece em rascunho. Não autoriza merge nem publicação.
+
+## Correções da revisão final
+
+- Bootstrap: a criação do primeiro administrador passou a usar `INSERT ... SELECT ... WHERE NOT EXISTS` atômico no D1. A resposta verifica `meta.changes`, evitando aceitar uma segunda criação após concorrência entre requisições. A verificação inicial permanece apenas para resposta antecipada.
+- Sessões: datas de expiração inválidas são rejeitadas e a sessão é revogada.
+- Testes de regressão cobrem as duas condições.
+
+## Observação sobre riscos de negócio
+
+O esquema inicial restringe `events.event_date` a uma única ocorrência por dia e `assignments.event_id` a um líder por evento. Essas limitações conflitam com funcionalidades futuras; a migração corretiva pertence ao módulo funcional correspondente, não deve ser aplicada sem planejamento. A disponibilidade binária também será revista nos módulos seguintes.

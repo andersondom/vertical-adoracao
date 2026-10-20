@@ -18,7 +18,7 @@ export async function getAuth(request, env) {
      WHERE s.id=?`
   ).bind(sessionId).first();
 
-  if (!row || !row.active || new Date(row.expires_at) <= new Date()) {
+  if (!row || !row.active || !Number.isFinite(Date.parse(row.expires_at)) || Date.parse(row.expires_at) <= Date.now()) {
     if (sessionId) {
       await env.DB.prepare(
         "DELETE FROM sessions WHERE id=?"

@@ -28,9 +28,12 @@ export async function handleApi(request, env, url) {
 
     const { hash, salt } = await hashPassword(password);
     const result = await env.DB.prepare(
-      "INSERT INTO users(name,email,password_hash,password_salt,role) VALUES(?,?,?,?, 'admin')"
+      "INSERT INTO users(name,email,password_hash,password_salt,role) SELECT ?,?,?,?,'admin' WHERE NOT EXISTS (SELECT 1 FROM users)"
     ).bind(name, email, hash, salt).run();
 
+    if (Number(result.meta?.changes || 0) !== 1) {
+      return json({ error: "Administrador inicial já configurado." }, 409);
+    }
     const userId = result.meta.last_row_id;
     await logAudit(env, userId, "BOOTSTRAP_ADMIN", email);
     return await createSessionResponse(env, userId, { ok: true });
