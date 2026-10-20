@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/verify-staging-config.mjs
+      - run: node scripts/check-local-only.mjs
       - run: npm run db:local
       - run: npm run seed:local
       - run: npm test
