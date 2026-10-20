@@ -183,12 +183,12 @@ function renderSettings(){
   </div>
   <div class="card"><h2>➕ Novo evento</h2>
   <div class="grid g2"><label>Data<input id="eDate" type="date"></label><label>Código do dia<input id="eDay" placeholder="Q, S, D, Sx"></label><label>Título<input id="eTitle"></label><label>Emoji<input id="eIcon" value="🎶"></label></div><br>
-  <button onclick="createEvent()">Adicionar evento</button><p id="eMsg"></p></div>\`;
+  <button onclick="createScheduleEvent()">Adicionar evento</button><p id="eMsg"></p></div>\`;
 }
 async function toggleWindow(open){
   await api('/api/admin/settings',{method:'POST',body:JSON.stringify({availabilityOpen:!!open})});await reloadData();
 }
-async function createEvent(){
+async function createScheduleEvent(){
   const msg=id('eMsg');msg.textContent='';
   try{
     await api('/api/admin/event',{method:'POST',body:JSON.stringify({eventDate:val('eDate'),dayCode:val('eDay'),title:val('eTitle'),icon:val('eIcon')})});
