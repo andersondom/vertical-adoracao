@@ -251,9 +251,27 @@ export async function handleApi(request, env, url) {
       return json({ error: "Esta escalação não pode ser alterada." }, 409);
     }
     const status = body.confirm ? "confirmed" : "declined";
-    await env.DB.prepare(
-      "UPDATE team_assignments SET status=?,updated_at=CURRENT_TIMESTAMP WHERE event_id=? AND user_id=? AND role_id=?"
-    ).bind(status,eventId,auth.user.id,roleId).run();
+    if (body.confirm) {
+      const current = await env.DB.prepare(
+        "SELECT is_leader FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
+      ).bind(eventId,auth.user.id,roleId).first();
+      if (current?.is_leader) {
+        const leader = await env.DB.prepare(
+          `SELECT 1 AS ok FROM team_assignments
+           WHERE event_id=? AND is_leader=1 AND status IN ('reserved','confirmed')
+           AND NOT (user_id=? AND role_id=?) LIMIT 1`
+        ).bind(eventId,auth.user.id,roleId).first();
+        if (leader) return json({ error: "Já existe liderança reservada ou confirmada." }, 409);
+      }
+    }
+    try {
+      await env.DB.prepare(
+        "UPDATE team_assignments SET status=?,updated_at=CURRENT_TIMESTAMP WHERE event_id=? AND user_id=? AND role_id=?"
+      ).bind(status,eventId,auth.user.id,roleId).run();
+    } catch (error) {
+      if (/UNIQUE constraint/i.test(String(error))) return json({ error: "Conflito na confirmação de liderança." }, 409);
+      throw error;
+    }
     await logAudit(env,auth.user.id,"TEAM_CONFIRMATION",JSON.stringify({eventId,roleId,status}));
     return json({ ok: true });
   }
