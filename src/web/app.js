@@ -159,7 +159,7 @@ function renderSchedule(){
       for(const x of team){
         const event=DATA.events.find(e=>Number(e.id)===Number(x.event_id));
         const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
-        html+=\`<div class="avail">\${esc(event?.event_date||'Evento')} — \${esc(role?.label||'Função')} — \${esc(x.status)} \${x.status!=='declined'?\`<button class="smallbtn" onclick="confirmTeam(\${x.event_id},\${x.role_id},true)">Confirmar</button> <button class="smallbtn alt" onclick="confirmTeam(\${x.event_id},\${x.role_id},false)">Recusar</button>\`:''}</div>\`;
+        html+=\`<div class="avail">\${esc(event?.event_date||'Evento')} — \${esc(role?.label||'Função')} — \${esc(x.status)} \${['reserved','confirmed'].includes(x.status)?\`<button class="smallbtn" onclick="confirmTeam(\${x.event_id},\${x.role_id},true)">Confirmar</button> <button class="smallbtn alt" onclick="confirmTeam(\${x.event_id},\${x.role_id},false)">Recusar</button>\`:''}</div>\`;
       }
       html+='</div>';
     }
