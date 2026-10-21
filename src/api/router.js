@@ -320,13 +320,18 @@ export async function handleApi(request, env, url) {
               u.active AS active,
               COALESCE(av.available,0) AS available,
               (SELECT COUNT(*) FROM team_assignments ta
-               WHERE ta.user_id=mr.user_id AND ta.status IN ('reserved','confirmed')) AS recentAssignments
+               JOIN events history_event ON history_event.id=ta.event_id
+               JOIN events target_event ON target_event.id=?
+               WHERE ta.user_id=mr.user_id
+                 AND ta.status IN ('reserved','confirmed')
+                 AND history_event.event_date < target_event.event_date
+                 AND history_event.event_date >= date(target_event.event_date,'-90 days')) AS recentAssignments
        FROM member_roles mr
        JOIN users u ON u.id=mr.user_id
        JOIN ministry_roles r ON r.id=mr.role_id AND r.active=1
        LEFT JOIN availability av ON av.user_id=mr.user_id AND av.event_id=?
        WHERE u.active=1 ORDER BY mr.user_id,mr.role_id`
-    ).bind(eventId).all()).results.map(x=>({
+    ).bind(eventId,eventId).all()).results.map(x=>({
       userId:Number(x.userId),roleId:Number(x.roleId),
       active:Boolean(x.active),available:Boolean(x.available),
       recentAssignments:Number(x.recentAssignments)
