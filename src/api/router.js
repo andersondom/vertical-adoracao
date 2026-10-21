@@ -189,6 +189,75 @@ export async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
+  if (url.pathname === "/api/admin/team-assignment" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.userId) ||
+        !isPositiveInteger(body.roleId) || !["proposed","reserved","confirmed"].includes(body.status)) {
+      return json({ error: "Escalação inválida." }, 400);
+    }
+    const eventId = Number(body.eventId);
+    const userId = Number(body.userId);
+    const roleId = Number(body.roleId);
+    const isLeader = body.isLeader === true;
+    const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
+    const member = await env.DB.prepare("SELECT id,active FROM users WHERE id=?").bind(userId).first();
+    const role = await env.DB.prepare("SELECT id,code,active FROM ministry_roles WHERE id=?").bind(roleId).first();
+    const eligible = await env.DB.prepare("SELECT 1 AS ok FROM member_roles WHERE user_id=? AND role_id=?")
+      .bind(userId,roleId).first();
+    const available = await env.DB.prepare("SELECT available FROM availability WHERE event_id=? AND user_id=?")
+      .bind(eventId,userId).first();
+    if (!event || !member || !role) return json({ error: "Evento, integrante ou função não encontrado." }, 404);
+    if (!member.active || !role.active || !eligible || !available?.available) {
+      return json({ error: "Integrante indisponível ou sem função habilitada." }, 409);
+    }
+    if (isLeader !== (role.code === "leader")) {
+      return json({ error: "Liderança exige a função de líder." }, 400);
+    }
+    if (isLeader && body.status !== "proposed") {
+      const occupied = await env.DB.prepare(
+        `SELECT 1 AS ok FROM team_assignments
+         WHERE event_id=? AND is_leader=1 AND status IN ('reserved','confirmed')
+         AND NOT (user_id=? AND role_id=?) LIMIT 1`
+      ).bind(eventId,userId,roleId).first();
+      if (occupied) return json({ error: "O evento já possui um líder reservado ou confirmado." }, 409);
+    }
+    try {
+      await env.DB.prepare(
+        `INSERT INTO team_assignments(event_id,user_id,role_id,status,is_leader,updated_at)
+         VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)
+         ON CONFLICT(event_id,user_id,role_id) DO UPDATE SET
+           status=excluded.status,is_leader=excluded.is_leader,updated_at=CURRENT_TIMESTAMP`
+      ).bind(eventId,userId,roleId,body.status,isLeader?1:0).run();
+    } catch (error) {
+      if (/UNIQUE constraint/i.test(String(error))) return json({ error: "Conflito na reserva de liderança." }, 409);
+      throw error;
+    }
+    await logAudit(env, auth.user.id, "TEAM_ASSIGNMENT_UPDATE", JSON.stringify({eventId,userId,roleId,status:body.status,isLeader}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/team-confirmation" && request.method === "POST") {
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.roleId) ||
+        typeof body.confirm !== "boolean") return json({ error: "Confirmação inválida." }, 400);
+    const eventId = Number(body.eventId);
+    const roleId = Number(body.roleId);
+    const assignment = await env.DB.prepare(
+      "SELECT status FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
+    ).bind(eventId,auth.user.id,roleId).first();
+    if (!assignment) return json({ error: "Você não possui esta escalação." }, 404);
+    if (!["proposed","reserved","confirmed"].includes(assignment.status)) {
+      return json({ error: "Esta escalação não pode ser alterada." }, 409);
+    }
+    const status = body.confirm ? "confirmed" : "declined";
+    await env.DB.prepare(
+      "UPDATE team_assignments SET status=?,updated_at=CURRENT_TIMESTAMP WHERE event_id=? AND user_id=? AND role_id=?"
+    ).bind(status,eventId,auth.user.id,roleId).run();
+    await logAudit(env,auth.user.id,"TEAM_CONFIRMATION",JSON.stringify({eventId,roleId,status}));
+    return json({ ok: true });
+  }
+
   if (url.pathname === "/api/admin/team-suggestions" && request.method === "GET") {
     requireAdmin(auth);
     const rawEventId = url.searchParams.get("eventId");
