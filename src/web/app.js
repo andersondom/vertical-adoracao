@@ -205,12 +205,16 @@ function renderUsers(){
    <label>Senha inicial<input id="uPass" type="password" minlength="8"></label>
    <label>Perfil<select id="uRole"><option value="member">Integrante</option><option value="admin">Administrador</option></select></label>
   </div><br><button onclick="createUser()">Cadastrar</button><p id="uMsg"></p></div>
-  \${DATA.members.map(u=>\`<div class="card row"><div><strong>\${esc(u.name)}</strong><div class="muted">\${esc(u.email)} · \${u.role==='admin'?'Administrador':'Integrante'} · \${u.active?'Ativo':'Desativado'}</div></div><div class="row">
+  \${DATA.members.map(u=>\`<div class="card row"><div><strong>\${esc(u.name)}</strong><div class="muted">\${esc(u.email)} · \${u.role==='admin'?'Administrador':'Integrante'} · \${u.active?'Ativo':'Desativado'}</div><div class="avail"><strong>Funções:</strong> \${(DATA.roles||[]).filter(r=>r.active).map(r=>\`<label style="font-weight:400;margin:6px"><input class="checkbox" type="checkbox" \${(DATA.memberRoles||[]).some(m=>Number(m.user_id)===Number(u.id)&&Number(m.role_id)===Number(r.id))?'checked':''} onchange="updateMemberRole(\${u.id},\${r.id},this.checked)"> \${esc(r.label)}</label>\`).join('')}</div></div><div class="row">
   <button class="smallbtn alt" onclick="resetPass(\${u.id})">Alterar senha</button>
   <button class="smallbtn \${u.active?'danger':'alt'}" onclick="toggleUser(\${u.id},\${u.active?0:1})">\${u.active?'Desativar':'Ativar'}</button>
   </div></div>\`).join('')}\`;
 }
 
+async function updateMemberRole(userId,roleId,enabled){
+  try{await api('/api/admin/member-role',{method:'POST',body:JSON.stringify({userId,roleId,enabled})});await reloadData()}
+  catch(e){alert(e.message);await reloadData()}
+}
 async function createUser(){
   const msg=id('uMsg');msg.textContent='';
   try{
