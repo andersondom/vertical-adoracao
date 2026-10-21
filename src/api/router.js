@@ -357,6 +357,13 @@ export async function handleApi(request, env, url) {
     if (body.enabled) {
       await env.DB.prepare("INSERT OR IGNORE INTO member_roles(user_id,role_id) VALUES(?,?)").bind(userId,roleId).run();
     } else {
+      const activeAssignments = await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM team_assignments
+         WHERE user_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')`
+      ).bind(userId,roleId).first();
+      if (Number(activeAssignments?.total||0)>0) {
+        return json({ error: "A função possui escalações pendentes ou confirmadas. Resolva-as antes de desativá-la." }, 409);
+      }
       await env.DB.prepare("DELETE FROM member_roles WHERE user_id=? AND role_id=?").bind(userId,roleId).run();
     }
     await logAudit(env, auth.user.id, "MEMBER_ROLE_UPDATE", JSON.stringify({userId,roleId,enabled:body.enabled}));
