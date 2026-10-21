@@ -137,6 +137,13 @@ function renderSchedule(){
       const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
       html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.length} integrante(s) escalado(s) <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
     }
+    html+='<div class="avail"><strong>Formação desejada por evento</strong></div>';
+    for(const e of DATA.events){
+      html+='<div class="avail">'+esc(e.event_date)+': '+(DATA.roles||[]).filter(r=>r.active).map(r=>{
+        const req=(DATA.requirements||[]).find(x=>Number(x.event_id)===Number(e.id)&&Number(x.role_id)===Number(r.id));
+        return '<label style="display:inline-block;margin:5px">'+esc(r.label)+' <input type="number" min="0" max="50" style="width:65px" value="'+Number(req?.slots||0)+'" onchange="updateRequirement('+Number(e.id)+','+Number(r.id)+',this.value)"></label>';
+      }).join('')+'</div>';
+    }
     html+='</div>';
   } else {
     const team=DATA.teamAssignments||[];
@@ -153,6 +160,12 @@ function renderSchedule(){
   id('scheduleView').innerHTML=html;
 }
 
+async function updateRequirement(eventId,roleId,value){
+  const slots=Number(value);
+  if(!Number.isSafeInteger(slots)||slots<0||slots>50){alert('Quantidade inválida.');return;}
+  try{await api('/api/admin/event-requirement',{method:'POST',body:JSON.stringify({eventId,roleId,slots})});await reloadData()}
+  catch(e){alert(e.message);await reloadData()}
+}
 async function previewTeam(eventId){
   const target=id('preview'+eventId);
   target.textContent='Buscando sugestões...';
