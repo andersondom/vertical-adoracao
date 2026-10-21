@@ -34,3 +34,12 @@ test("ignora usuários inativos e aceita múltiplas funções",()=>{
 test("rejeita entradas malformadas",()=>{
   assert.throws(()=>suggestTeam({requirements:[{roleId:1,slots:-1,isLeader:false}],candidates:[]}),/Formação/);
 });
+
+test("liderança proposta bloqueia sugestão concorrente",()=>{
+  const result=suggestTeam({
+    requirements:[{roleId:3,slots:2,isLeader:true}],
+    existing:[{userId:1,roleId:3,status:"proposed",isLeader:true}],
+    candidates:[role(2,3,0),role(3,3,1)]
+  });
+  assert.deepEqual(result,[]);
+});

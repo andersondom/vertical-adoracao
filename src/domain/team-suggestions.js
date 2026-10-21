@@ -21,6 +21,9 @@ export function suggestTeam({ requirements, candidates, existing = [] }) {
     if (!Number.isSafeInteger(count) || count < 0) throw new TypeError("Histórico inválido.");
     if (!scores.has(key) || count < scores.get(key).recentAssignments) scores.set(key, {...person,recentAssignments:count});
   }
+  // Existing proposed leaders count as suggestions too: never recommend a
+  // second leader while one proposal remains under administrative review.
+  const leaderAlreadyProposed = () => chosen.some(x => x.isLeader && x.status !== "declined");
   for (const req of requirements) {
     if (!Number.isSafeInteger(req.roleId) || req.roleId <= 0 ||
         !Number.isSafeInteger(req.slots) || req.slots < 0 || req.slots > 50 ||
@@ -31,7 +34,7 @@ export function suggestTeam({ requirements, candidates, existing = [] }) {
       .sort((a,b) => a.recentAssignments-b.recentAssignments || a.userId-b.userId);
     for (const person of ranked) {
       if (chosen.filter(x => x.roleId === req.roleId && x.status !== "declined").length >= req.slots) break;
-      if (req.isLeader && chosen.some(x => x.isLeader && x.status !== "declined")) break;
+      if (req.isLeader && leaderAlreadyProposed()) break;
       const suggestion = {userId:person.userId,roleId:req.roleId,isLeader:req.isLeader,status:"proposed"};
       chosen.push(suggestion);
       keys.add(`${person.userId}:${req.roleId}`);
