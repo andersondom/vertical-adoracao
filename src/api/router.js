@@ -214,6 +214,28 @@ export async function handleApi(request, env, url) {
     if (isLeader !== (role.code === "leader")) {
       return json({ error: "Liderança exige a função de líder." }, 400);
     }
+    const requirement = await env.DB.prepare(
+      "SELECT slots FROM event_role_requirements WHERE event_id=? AND role_id=?"
+    ).bind(eventId,roleId).first();
+    if (!requirement || requirement.slots < 1) {
+      return json({ error: "A função não possui vagas configuradas para este evento." }, 409);
+    }
+    const occupiedSlots = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM team_assignments
+       WHERE event_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')
+       AND user_id<>?`
+    ).bind(eventId,roleId,userId).first();
+    if (Number(occupiedSlots?.total||0) >= requirement.slots) {
+      return json({ error: "Todas as vagas desta função estão ocupadas." }, 409);
+    }
+    if (isLeader) {
+      const proposedLeader = await env.DB.prepare(
+        `SELECT 1 AS ok FROM team_assignments
+         WHERE event_id=? AND is_leader=1 AND status IN ('proposed','reserved','confirmed')
+         AND NOT (user_id=? AND role_id=?) LIMIT 1`
+      ).bind(eventId,userId,roleId).first();
+      if (proposedLeader) return json({ error: "Já existe liderança proposta ou reservada para o evento." }, 409);
+    }
     if (isLeader && body.status !== "proposed") {
       const occupied = await env.DB.prepare(
         `SELECT 1 AS ok FROM team_assignments
