@@ -131,6 +131,13 @@ export async function handleApi(request, env, url) {
          DO UPDATE SET available=1,updated_at=CURRENT_TIMESTAMP`
       ).bind(eventId, targetUserId).run();
     } else {
+      const confirmed = await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM team_assignments
+         WHERE event_id=? AND user_id=? AND status IN ('reserved','confirmed')`
+      ).bind(eventId,targetUserId).first();
+      if (Number(confirmed?.total||0)>0) {
+        return json({ error: "Há escalações reservadas ou confirmadas. Solicite uma substituição antes de retirar a disponibilidade." }, 409);
+      }
       await env.DB.prepare("DELETE FROM availability WHERE event_id=? AND user_id=?")
         .bind(eventId, targetUserId).run();
     }
