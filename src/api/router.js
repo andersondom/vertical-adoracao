@@ -188,6 +188,49 @@ export async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
+  if (url.pathname === "/api/admin/member-role" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.userId) || !isPositiveInteger(body.roleId) ||
+        typeof body.enabled !== "boolean") {
+      return json({ error: "Dados de função inválidos." }, 400);
+    }
+    const userId = Number(body.userId);
+    const roleId = Number(body.roleId);
+    const member = await env.DB.prepare("SELECT id,active FROM users WHERE id=?").bind(userId).first();
+    const role = await env.DB.prepare("SELECT id,active FROM ministry_roles WHERE id=?").bind(roleId).first();
+    if (!member || !role) return json({ error: "Integrante ou função não encontrado." }, 404);
+    if (!member.active || !role.active) return json({ error: "Integrante ou função desativado." }, 400);
+    if (body.enabled) {
+      await env.DB.prepare("INSERT OR IGNORE INTO member_roles(user_id,role_id) VALUES(?,?)").bind(userId,roleId).run();
+    } else {
+      await env.DB.prepare("DELETE FROM member_roles WHERE user_id=? AND role_id=?").bind(userId,roleId).run();
+    }
+    await logAudit(env, auth.user.id, "MEMBER_ROLE_UPDATE", JSON.stringify({userId,roleId,enabled:body.enabled}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/event-requirement" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.roleId) ||
+        !Number.isSafeInteger(body.slots) || body.slots < 0 || body.slots > 50) {
+      return json({ error: "Formação inválida." }, 400);
+    }
+    const eventId = Number(body.eventId);
+    const roleId = Number(body.roleId);
+    const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
+    const role = await env.DB.prepare("SELECT id,active FROM ministry_roles WHERE id=?").bind(roleId).first();
+    if (!event || !role) return json({ error: "Evento ou função não encontrado." }, 404);
+    if (!role.active) return json({ error: "Função desativada." }, 400);
+    await env.DB.prepare(
+      `INSERT INTO event_role_requirements(event_id,role_id,slots) VALUES(?,?,?)
+       ON CONFLICT(event_id,role_id) DO UPDATE SET slots=excluded.slots`
+    ).bind(eventId,roleId,body.slots).run();
+    await logAudit(env, auth.user.id, "EVENT_REQUIREMENT_UPDATE", JSON.stringify({eventId,roleId,slots:body.slots}));
+    return json({ ok: true });
+  }
+
   if (url.pathname === "/api/admin/users" && request.method === "POST") {
     requireAdmin(auth);
     const body = await request.json();
