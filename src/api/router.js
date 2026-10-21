@@ -376,6 +376,13 @@ export async function handleApi(request, env, url) {
     const role = await env.DB.prepare("SELECT id,active FROM ministry_roles WHERE id=?").bind(roleId).first();
     if (!event || !role) return json({ error: "Evento ou função não encontrado." }, 404);
     if (!role.active) return json({ error: "Função desativada." }, 400);
+    const existingSlots = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM team_assignments
+       WHERE event_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')`
+    ).bind(eventId,roleId).first();
+    if (Number(existingSlots?.total||0) > body.slots) {
+      return json({ error: "A formação não pode ter menos vagas que as escalações já existentes." }, 409);
+    }
     await env.DB.prepare(
       `INSERT INTO event_role_requirements(event_id,role_id,slots) VALUES(?,?,?)
        ON CONFLICT(event_id,role_id) DO UPDATE SET slots=excluded.slots`
