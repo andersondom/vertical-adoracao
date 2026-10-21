@@ -131,9 +131,49 @@ function renderSchedule(){
     }
     html+='</article>';
   }
+  if(ME.role==='admin'){
+    html+='<div class="card"><h2>Montagem de equipes</h2>';
+    for(const e of DATA.events){
+      const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
+      html+=`<div class="avail"><strong>${esc(e.event_date)}</strong> — ${team.length} integrante(s) escalado(s) <button class="smallbtn" onclick="previewTeam(${e.id})">Sugerir equipe</button><div id="preview${e.id}"></div></div>`;
+    }
+    html+='</div>';
+  } else {
+    const team=DATA.teamAssignments||[];
+    if(team.length){
+      html+='<div class="card"><h2>Minhas escalações</h2>';
+      for(const x of team){
+        const event=DATA.events.find(e=>Number(e.id)===Number(x.event_id));
+        const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
+        html+=`<div class="avail">${esc(event?.event_date||'Evento')} — ${esc(role?.label||'Função')} — ${esc(x.status)} ${x.status!=='declined'?`<button class="smallbtn" onclick="confirmTeam(${x.event_id},${x.role_id},true)">Confirmar</button> <button class="smallbtn alt" onclick="confirmTeam(${x.event_id},${x.role_id},false)">Recusar</button>`:''}</div>`;
+      }
+      html+='</div>';
+    }
+  }
   id('scheduleView').innerHTML=html;
 }
 
+async function previewTeam(eventId){
+  const target=id('preview'+eventId);
+  target.textContent='Buscando sugestões...';
+  try{
+    const result=await api('/api/admin/team-suggestions?eventId='+encodeURIComponent(eventId));
+    if(!result.suggestions.length){target.textContent='Nenhum integrante elegível disponível.';return;}
+    target.innerHTML=result.suggestions.map(x=>{
+      const member=DATA.members.find(m=>Number(m.id)===Number(x.userId));
+      const role=DATA.roles.find(r=>Number(r.id)===Number(x.roleId));
+      return `<div class="row"><span>${esc(member?.name||'Integrante')} — ${esc(role?.label||'Função')}</span><button class="smallbtn" onclick="saveSuggestion(${eventId},${x.userId},${x.roleId},${x.isLeader})">Propor</button></div>`;
+    }).join('');
+  }catch(e){target.textContent=e.message}
+}
+async function saveSuggestion(eventId,userId,roleId,isLeader){
+  try{await api('/api/admin/team-assignment',{method:'POST',body:JSON.stringify({eventId,userId,roleId,isLeader,status:'proposed'})});await reloadData()}
+  catch(e){alert(e.message)}
+}
+async function confirmTeam(eventId,roleId,confirm){
+  try{await api('/api/team-confirmation',{method:'POST',body:JSON.stringify({eventId,roleId,confirm})});await reloadData()}
+  catch(e){alert(e.message)}
+}
 async function setAvailability(eventId, available){
   try{ await api('/api/availability',{method:'POST',body:JSON.stringify({eventId,available})}); await reloadData(); }
   catch(e){alert(e.message);await reloadData();}
