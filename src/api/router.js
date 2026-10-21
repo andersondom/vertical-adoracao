@@ -5,6 +5,7 @@ import { requireAdmin } from "../auth/authorization.js";
 import { json } from "../utils/http.js";
 import { logAudit } from "../db/audit.js";
 import { getData } from "../db/schedule.js";
+import { suggestTeam } from "../domain/team-suggestions.js";
 import { loginIdentityHash, isLoginBlocked, recordLoginFailure, clearLoginFailures } from "../auth/login-rate-limit.js";
 
 export async function handleApi(request, env, url) {
@@ -186,6 +187,48 @@ export async function handleApi(request, env, url) {
 
     await logAudit(env, auth.user.id, "ASSIGNMENT_UPDATE", JSON.stringify({eventId,userId}));
     return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/team-suggestions" && request.method === "GET") {
+    requireAdmin(auth);
+    const rawEventId = url.searchParams.get("eventId");
+    if (!isPositiveInteger(rawEventId)) return json({ error: "Evento inválido." }, 400);
+    const eventId = Number(rawEventId);
+    const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
+    if (!event) return json({ error: "Evento não encontrado." }, 404);
+
+    const requirements = (await env.DB.prepare(
+      `SELECT r.role_id AS roleId,r.slots,
+              CASE WHEN mr.code='leader' THEN 1 ELSE 0 END AS isLeader
+       FROM event_role_requirements r JOIN ministry_roles mr ON mr.id=r.role_id
+       WHERE r.event_id=? AND mr.active=1 ORDER BY r.role_id`
+    ).bind(eventId).all()).results.map(x=>({
+      roleId: Number(x.roleId),slots:Number(x.slots),isLeader:Boolean(x.isLeader)
+    }));
+    const candidates = (await env.DB.prepare(
+      `SELECT mr.user_id AS userId,mr.role_id AS roleId,
+              u.active AS active,
+              COALESCE(av.available,0) AS available,
+              (SELECT COUNT(*) FROM team_assignments ta
+               WHERE ta.user_id=mr.user_id AND ta.status IN ('reserved','confirmed')) AS recentAssignments
+       FROM member_roles mr
+       JOIN users u ON u.id=mr.user_id
+       JOIN ministry_roles r ON r.id=mr.role_id AND r.active=1
+       LEFT JOIN availability av ON av.user_id=mr.user_id AND av.event_id=?
+       WHERE u.active=1 ORDER BY mr.user_id,mr.role_id`
+    ).bind(eventId).all()).results.map(x=>({
+      userId:Number(x.userId),roleId:Number(x.roleId),
+      active:Boolean(x.active),available:Boolean(x.available),
+      recentAssignments:Number(x.recentAssignments)
+    }));
+    const existing = (await env.DB.prepare(
+      "SELECT user_id AS userId,role_id AS roleId,status,is_leader AS isLeader FROM team_assignments WHERE event_id=?"
+    ).bind(eventId).all()).results.map(x=>({
+      userId:Number(x.userId),roleId:Number(x.roleId),
+      status:x.status,isLeader:Boolean(x.isLeader)
+    }));
+    const suggestions = suggestTeam({requirements,candidates,existing});
+    return json({ eventId, suggestions, saved: false, requiresApproval: true });
   }
 
   if (url.pathname === "/api/admin/member-role" && request.method === "POST") {
