@@ -266,7 +266,7 @@ export async function handleApi(request, env, url) {
     const eventId = Number(body.eventId);
     const roleId = Number(body.roleId);
     const assignment = await env.DB.prepare(
-      "SELECT status FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
+      "SELECT status,is_leader FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
     ).bind(eventId,auth.user.id,roleId).first();
     if (!assignment) return json({ error: "Você não possui esta escalação." }, 404);
     if (!["proposed","reserved","confirmed"].includes(assignment.status)) {
@@ -274,18 +274,13 @@ export async function handleApi(request, env, url) {
     }
     if (body.confirm && assignment.status === "proposed") return json({ error: "A escalação ainda aguarda aprovação do administrador." }, 409);
     const status = body.confirm ? "confirmed" : "declined";
-    if (body.confirm) {
-      const current = await env.DB.prepare(
-        "SELECT is_leader FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
+    if (body.confirm && assignment.is_leader) {
+      const leader = await env.DB.prepare(
+        `SELECT 1 AS ok FROM team_assignments
+         WHERE event_id=? AND is_leader=1 AND status IN ('reserved','confirmed')
+         AND NOT (user_id=? AND role_id=?) LIMIT 1`
       ).bind(eventId,auth.user.id,roleId).first();
-      if (current?.is_leader) {
-        const leader = await env.DB.prepare(
-          `SELECT 1 AS ok FROM team_assignments
-           WHERE event_id=? AND is_leader=1 AND status IN ('reserved','confirmed')
-           AND NOT (user_id=? AND role_id=?) LIMIT 1`
-        ).bind(eventId,auth.user.id,roleId).first();
-        if (leader) return json({ error: "Já existe liderança reservada ou confirmada." }, 409);
-      }
+      if (leader) return json({ error: "Já existe liderança reservada ou confirmada." }, 409);
     }
     try {
       await env.DB.prepare(
