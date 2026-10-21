@@ -1,3 +1,9 @@
 node_modules/
 .wrangler/
 .dev.vars
+
+# Arquivos locais de staging e recuperacao: nunca versionar dados/credenciais.
+wrangler.staging.jsonc
+backup-staging-*.sql
+restauracao-teste-*.db
+restauracao-teste-*.db-*

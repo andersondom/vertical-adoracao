@@ -2,12 +2,16 @@ import { appHtml } from "./web/app.js";
 import { handleApi } from "./api/router.js";
 import { logout } from "./auth/session.js";
 import { json, htmlResponse } from "./utils/http.js";
+import { isAllowedMutationOrigin } from "./auth/request-security.js";
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     try {
+      if (url.pathname.startsWith("/api/") && !isAllowedMutationOrigin(request)) {
+        return json({ error: "Origem da requisição não permitida." }, 403);
+      }
       if (url.pathname.startsWith("/api/")) {
         return await handleApi(request, env, url);
       }

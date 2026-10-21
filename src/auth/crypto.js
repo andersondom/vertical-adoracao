@@ -1,3 +1,5 @@
+export const PBKDF2_ITERATIONS = 100000;
+
 export async function hashPassword(password, saltB64 = null) {
   const enc = new TextEncoder();
   const salt = saltB64
@@ -16,7 +18,7 @@ export async function hashPassword(password, saltB64 = null) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 210000,
+      iterations: PBKDF2_ITERATIONS,
       hash: "SHA-256"
     },
     key,

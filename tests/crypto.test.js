@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  PBKDF2_ITERATIONS,
   hashPassword,
   verifyPassword,
   randomToken
@@ -41,4 +42,10 @@ test("randomToken gera tokens distintos", () => {
   assert.ok(token1.length > 20);
   assert.ok(token2.length > 20);
   assert.notEqual(token1, token2);
+});
+
+test("PBKDF2 respeita o limite de 100000 iteracoes do Cloudflare Workers", async () => {
+  assert.equal(PBKDF2_ITERATIONS, 100000);
+  const { hash, salt } = await hashPassword("senha-compativel-staging");
+  assert.equal(await verifyPassword("senha-compativel-staging", hash, salt), true);
 });

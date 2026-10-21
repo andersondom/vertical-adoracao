@@ -1,0 +1,26 @@
+name: Validacao automatizada
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-staging-config.mjs
+      - run: node scripts/check-local-only.mjs
+      - run: npm run db:local
+      - run: npm run seed:local
+      - run: npm test
+        env:
+          RUN_D1_INTEGRATION: '1'
+      - run: npx wrangler deploy --dry-run --outdir /tmp/vertical-adoracao-build
