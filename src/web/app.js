@@ -131,9 +131,73 @@ function renderSchedule(){
     }
     html+='</article>';
   }
+  if(ME.role==='admin'){
+    html+='<div class="card"><h2>Montagem de equipes</h2>';
+    for(const e of DATA.events){
+      const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
+      html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.length} integrante(s) escalado(s) <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
+    html+=\`<div class="avail">\${team.map(x=>{
+      const member=(DATA.members||[]).find(m=>Number(m.id)===Number(x.user_id));
+      const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
+      return '<div class="row"><span>'+esc(member?.name||'Integrante')+' — '+esc(role?.label||'Função')+' ('+esc(x.status)+')</span>'+
+        (x.status==='proposed'?'<button class="smallbtn" onclick="approveTeam('+Number(e.id)+','+Number(x.user_id)+','+Number(x.role_id)+','+Boolean(x.is_leader)+')">Aprovar reserva</button>':'')+'</div>';
+    }).join('')}</div>\`;
+
+    }
+    html+='<div class="avail"><strong>Formação desejada por evento</strong></div>';
+    for(const e of DATA.events){
+      html+='<div class="avail">'+esc(e.event_date)+': '+(DATA.roles||[]).filter(r=>r.active).map(r=>{
+        const req=(DATA.requirements||[]).find(x=>Number(x.event_id)===Number(e.id)&&Number(x.role_id)===Number(r.id));
+        return '<label style="display:inline-block;margin:5px">'+esc(r.label)+' <input type="number" min="0" max="50" style="width:65px" value="'+Number(req?.slots||0)+'" onchange="updateRequirement('+Number(e.id)+','+Number(r.id)+',this.value)"></label>';
+      }).join('')+'</div>';
+    }
+    html+='</div>';
+  } else {
+    const team=DATA.teamAssignments||[];
+    if(team.length){
+      html+='<div class="card"><h2>Minhas escalações</h2>';
+      for(const x of team){
+        const event=DATA.events.find(e=>Number(e.id)===Number(x.event_id));
+        const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
+        html+=\`<div class="avail">\${esc(event?.event_date||'Evento')} — \${esc(role?.label||'Função')} — \${esc(x.status)} \${['reserved','confirmed'].includes(x.status)?\`<button class="smallbtn" onclick="confirmTeam(\${x.event_id},\${x.role_id},true)">Confirmar</button> <button class="smallbtn alt" onclick="confirmTeam(\${x.event_id},\${x.role_id},false)">Recusar</button>\`:''}</div>\`;
+      }
+      html+='</div>';
+    }
+  }
   id('scheduleView').innerHTML=html;
 }
 
+async function updateRequirement(eventId,roleId,value){
+  const slots=Number(value);
+  if(!Number.isSafeInteger(slots)||slots<0||slots>50){alert('Quantidade inválida.');return;}
+  try{await api('/api/admin/event-requirement',{method:'POST',body:JSON.stringify({eventId,roleId,slots})});await reloadData()}
+  catch(e){alert(e.message);await reloadData()}
+}
+async function previewTeam(eventId){
+  const target=id('preview'+eventId);
+  target.textContent='Buscando sugestões...';
+  try{
+    const result=await api('/api/admin/team-suggestions?eventId='+encodeURIComponent(eventId));
+    if(!result.suggestions.length){target.textContent='Nenhum integrante elegível disponível.';return;}
+    target.innerHTML=result.suggestions.map(x=>{
+      const member=DATA.members.find(m=>Number(m.id)===Number(x.userId));
+      const role=DATA.roles.find(r=>Number(r.id)===Number(x.roleId));
+      return \`<div class="row"><span>\${esc(member?.name||'Integrante')} — \${esc(role?.label||'Função')}</span><button class="smallbtn" onclick="saveSuggestion(\${eventId},\${x.userId},\${x.roleId},\${x.isLeader})">Propor</button></div>\`;
+    }).join('');
+  }catch(e){target.textContent=e.message}
+}
+async function approveTeam(eventId,userId,roleId,isLeader){
+  try{await api('/api/admin/team-assignment',{method:'POST',body:JSON.stringify({eventId,userId,roleId,isLeader,status:'reserved'})});await reloadData()}
+  catch(e){alert(e.message)}
+}
+async function saveSuggestion(eventId,userId,roleId,isLeader){
+  try{await api('/api/admin/team-assignment',{method:'POST',body:JSON.stringify({eventId,userId,roleId,isLeader,status:'proposed'})});await reloadData()}
+  catch(e){alert(e.message)}
+}
+async function confirmTeam(eventId,roleId,confirm){
+  try{await api('/api/team-confirmation',{method:'POST',body:JSON.stringify({eventId,roleId,confirm})});await reloadData()}
+  catch(e){alert(e.message)}
+}
 async function setAvailability(eventId, available){
   try{ await api('/api/availability',{method:'POST',body:JSON.stringify({eventId,available})}); await reloadData(); }
   catch(e){alert(e.message);await reloadData();}
@@ -152,12 +216,16 @@ function renderUsers(){
    <label>Senha inicial<input id="uPass" type="password" minlength="8"></label>
    <label>Perfil<select id="uRole"><option value="member">Integrante</option><option value="admin">Administrador</option></select></label>
   </div><br><button onclick="createUser()">Cadastrar</button><p id="uMsg"></p></div>
-  \${DATA.members.map(u=>\`<div class="card row"><div><strong>\${esc(u.name)}</strong><div class="muted">\${esc(u.email)} · \${u.role==='admin'?'Administrador':'Integrante'} · \${u.active?'Ativo':'Desativado'}</div></div><div class="row">
+  \${DATA.members.map(u=>\`<div class="card row"><div><strong>\${esc(u.name)}</strong><div class="muted">\${esc(u.email)} · \${u.role==='admin'?'Administrador':'Integrante'} · \${u.active?'Ativo':'Desativado'}</div><div class="avail"><strong>Funções:</strong> \${(DATA.roles||[]).filter(r=>r.active).map(r=>\`<label style="font-weight:400;margin:6px"><input class="checkbox" type="checkbox" \${(DATA.memberRoles||[]).some(m=>Number(m.user_id)===Number(u.id)&&Number(m.role_id)===Number(r.id))?'checked':''} onchange="updateMemberRole(\${u.id},\${r.id},this.checked)"> \${esc(r.label)}</label>\`).join('')}</div></div><div class="row">
   <button class="smallbtn alt" onclick="resetPass(\${u.id})">Alterar senha</button>
   <button class="smallbtn \${u.active?'danger':'alt'}" onclick="toggleUser(\${u.id},\${u.active?0:1})">\${u.active?'Desativar':'Ativar'}</button>
   </div></div>\`).join('')}\`;
 }
 
+async function updateMemberRole(userId,roleId,enabled){
+  try{await api('/api/admin/member-role',{method:'POST',body:JSON.stringify({userId,roleId,enabled})});await reloadData()}
+  catch(e){alert(e.message);await reloadData()}
+}
 async function createUser(){
   const msg=id('uMsg');msg.textContent='';
   try{

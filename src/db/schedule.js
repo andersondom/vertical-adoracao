@@ -33,7 +33,37 @@ export async function getData(env, user) {
     ).all()).results;
   }
 
+  const roles = (await env.DB.prepare(
+    "SELECT id,code,label,active FROM ministry_roles ORDER BY id"
+  ).all()).results;
+  const ownRoles = (await env.DB.prepare(
+    "SELECT role_id FROM member_roles WHERE user_id=?"
+  ).bind(user.id).all()).results;
+  let memberRoles = [];
+  let requirements = [];
+  let teamAssignments = [];
+  if (user.role === "admin") {
+    memberRoles = (await env.DB.prepare(
+      "SELECT mr.user_id,mr.role_id FROM member_roles mr JOIN users u ON u.id=mr.user_id ORDER BY mr.user_id,mr.role_id"
+    ).all()).results;
+    requirements = (await env.DB.prepare(
+      "SELECT event_id,role_id,slots FROM event_role_requirements ORDER BY event_id,role_id"
+    ).all()).results;
+    teamAssignments = (await env.DB.prepare(
+      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments ORDER BY event_id,user_id,role_id"
+    ).all()).results;
+  } else {
+    teamAssignments = (await env.DB.prepare(
+      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments WHERE user_id=? ORDER BY event_id,role_id"
+    ).bind(user.id).all()).results;
+  }
+
   return {
+    roles,
+    ownRoles,
+    memberRoles,
+    requirements,
+    teamAssignments,
     settings,
     events: events.results,
     ownAvailability: ownAvailability.results,

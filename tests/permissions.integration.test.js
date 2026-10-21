@@ -47,7 +47,10 @@ for (const path of [
   "/api/admin/user-state",
   "/api/admin/password",
   "/api/admin/settings",
-  "/api/admin/event"
+  "/api/admin/event",
+  "/api/admin/member-role",
+  "/api/admin/event-requirement",
+  "/api/admin/team-assignment"
 ]) {
   test("integrante nao acessa " + path, async () => {
     const response = await call(path, "member");
@@ -75,4 +78,26 @@ test("CSRF bloqueia requisicao autenticada antes de consultar o banco", async ()
     DB: { prepare() { throw new Error("DB nao deveria ser consultado"); } }
   });
   assert.equal(response.status, 403);
+});
+
+test("integrante nao acessa sugestoes administrativas", async () => {
+  const response = await call("/api/admin/team-suggestions?eventId=1", "member", "GET");
+  assert.equal(response.status, 403);
+});
+
+test("rotas novas validam dados antes de consultar entidades", async () => {
+  for (const path of [
+    "/api/admin/member-role",
+    "/api/admin/event-requirement",
+    "/api/admin/team-assignment",
+    "/api/team-confirmation"
+  ]) {
+    const response = await call(path, "admin");
+    assert.equal(response.status, 400, path);
+  }
+});
+
+test("integrante nao pode confirmar escala de outro usuario por ID enviado", async () => {
+  const response = await call("/api/team-confirmation", "member");
+  assert.equal(response.status, 400);
 });
