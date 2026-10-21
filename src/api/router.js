@@ -250,6 +250,7 @@ export async function handleApi(request, env, url) {
     if (!["proposed","reserved","confirmed"].includes(assignment.status)) {
       return json({ error: "Esta escalação não pode ser alterada." }, 409);
     }
+    if (body.confirm && assignment.status === "proposed") return json({ error: "A escalação ainda aguarda aprovação do administrador." }, 409);
     const status = body.confirm ? "confirmed" : "declined";
     if (body.confirm) {
       const current = await env.DB.prepare(
