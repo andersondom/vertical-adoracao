@@ -273,6 +273,20 @@ export async function handleApi(request, env, url) {
       return json({ error: "Esta escalação não pode ser alterada." }, 409);
     }
     if (body.confirm && assignment.status === "proposed") return json({ error: "A escalação ainda aguarda aprovação do administrador." }, 409);
+    if (body.confirm) {
+      const eligible = await env.DB.prepare(
+        `SELECT u.active AS member_active,r.active AS role_active,
+                CASE WHEN mr.user_id IS NULL THEN 0 ELSE 1 END AS eligible,
+                COALESCE(av.available,0) AS available
+         FROM users u JOIN ministry_roles r ON r.id=?
+         LEFT JOIN member_roles mr ON mr.user_id=u.id AND mr.role_id=r.id
+         LEFT JOIN availability av ON av.user_id=u.id AND av.event_id=?
+         WHERE u.id=?`
+      ).bind(roleId,eventId,auth.user.id).first();
+      if (!eligible?.member_active || !eligible?.role_active || !eligible?.eligible || !eligible?.available) {
+        return json({ error: "Não é possível confirmar uma função ou disponibilidade que deixou de ser válida." }, 409);
+      }
+    }
     const status = body.confirm ? "confirmed" : "declined";
     if (body.confirm && assignment.is_leader) {
       const leader = await env.DB.prepare(
