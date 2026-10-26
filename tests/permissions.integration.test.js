@@ -50,7 +50,8 @@ for (const path of [
   "/api/admin/event",
   "/api/admin/member-role",
   "/api/admin/event-requirement",
-  "/api/admin/team-assignment"
+  "/api/admin/team-assignment",
+  "/api/admin/team-cancel"
 ]) {
   test("integrante nao acessa " + path, async () => {
     const response = await call(path, "member");
@@ -90,6 +91,7 @@ test("rotas novas validam dados antes de consultar entidades", async () => {
     "/api/admin/member-role",
     "/api/admin/event-requirement",
     "/api/admin/team-assignment",
+    "/api/admin/team-cancel",
     "/api/team-confirmation"
   ]) {
     const response = await call(path, "admin");
