@@ -5,6 +5,7 @@ import { requireAdmin } from "../auth/authorization.js";
 import { json } from "../utils/http.js";
 import { logAudit } from "../db/audit.js";
 import { getData } from "../db/schedule.js";
+import { suggestTeam } from "../domain/team-suggestions.js";
 import { loginIdentityHash, isLoginBlocked, recordLoginFailure, clearLoginFailures } from "../auth/login-rate-limit.js";
 
 export async function handleApi(request, env, url) {
@@ -130,6 +131,13 @@ export async function handleApi(request, env, url) {
          DO UPDATE SET available=1,updated_at=CURRENT_TIMESTAMP`
       ).bind(eventId, targetUserId).run();
     } else {
+      const confirmed = await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM team_assignments
+         WHERE event_id=? AND user_id=? AND status IN ('reserved','confirmed')`
+      ).bind(eventId,targetUserId).first();
+      if (Number(confirmed?.total||0)>0) {
+        return json({ error: "Há escalações reservadas ou confirmadas. Solicite uma substituição antes de retirar a disponibilidade." }, 409);
+      }
       await env.DB.prepare("DELETE FROM availability WHERE event_id=? AND user_id=?")
         .bind(eventId, targetUserId).run();
     }
@@ -188,6 +196,250 @@ export async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
+  if (url.pathname === "/api/admin/team-assignment" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.userId) ||
+        !isPositiveInteger(body.roleId) || !["proposed","reserved","confirmed"].includes(body.status)) {
+      return json({ error: "Escalação inválida." }, 400);
+    }
+    const eventId = Number(body.eventId);
+    const userId = Number(body.userId);
+    const roleId = Number(body.roleId);
+    const isLeader = body.isLeader === true;
+    const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
+    const member = await env.DB.prepare("SELECT id,active FROM users WHERE id=?").bind(userId).first();
+    const role = await env.DB.prepare("SELECT id,code,active FROM ministry_roles WHERE id=?").bind(roleId).first();
+    const eligible = await env.DB.prepare("SELECT 1 AS ok FROM member_roles WHERE user_id=? AND role_id=?")
+      .bind(userId,roleId).first();
+    const available = await env.DB.prepare("SELECT available FROM availability WHERE event_id=? AND user_id=?")
+      .bind(eventId,userId).first();
+    if (!event || !member || !role) return json({ error: "Evento, integrante ou função não encontrado." }, 404);
+    if (!member.active || !role.active || !eligible || !available?.available) {
+      return json({ error: "Integrante indisponível ou sem função habilitada." }, 409);
+    }
+    if (isLeader !== (role.code === "leader")) {
+      return json({ error: "Liderança exige a função de líder." }, 400);
+    }
+    const requirement = await env.DB.prepare(
+      "SELECT slots FROM event_role_requirements WHERE event_id=? AND role_id=?"
+    ).bind(eventId,roleId).first();
+    if (!requirement || requirement.slots < 1) {
+      return json({ error: "A função não possui vagas configuradas para este evento." }, 409);
+    }
+    const occupiedSlots = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM team_assignments
+       WHERE event_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')
+       AND user_id<>?`
+    ).bind(eventId,roleId,userId).first();
+    if (Number(occupiedSlots?.total||0) >= requirement.slots) {
+      return json({ error: "Todas as vagas desta função estão ocupadas." }, 409);
+    }
+    if (isLeader) {
+      const proposedLeader = await env.DB.prepare(
+        `SELECT 1 AS ok FROM team_assignments
+         WHERE event_id=? AND is_leader=1 AND status IN ('proposed','reserved','confirmed')
+         AND NOT (user_id=? AND role_id=?) LIMIT 1`
+      ).bind(eventId,userId,roleId).first();
+      if (proposedLeader) return json({ error: "Já existe liderança proposta ou reservada para o evento." }, 409);
+    }
+    if (isLeader && body.status !== "proposed") {
+      const occupied = await env.DB.prepare(
+        `SELECT 1 AS ok FROM team_assignments
+         WHERE event_id=? AND is_leader=1 AND status IN ('reserved','confirmed')
+         AND NOT (user_id=? AND role_id=?) LIMIT 1`
+      ).bind(eventId,userId,roleId).first();
+      if (occupied) return json({ error: "O evento já possui um líder reservado ou confirmado." }, 409);
+    }
+    try {
+      await env.DB.prepare(
+        `INSERT INTO team_assignments(event_id,user_id,role_id,status,is_leader,updated_at)
+         VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)
+         ON CONFLICT(event_id,user_id,role_id) DO UPDATE SET
+           status=excluded.status,is_leader=excluded.is_leader,updated_at=CURRENT_TIMESTAMP`
+      ).bind(eventId,userId,roleId,body.status,isLeader?1:0).run();
+    } catch (error) {
+      if (/UNIQUE constraint/i.test(String(error))) return json({ error: "Conflito na reserva de liderança." }, 409);
+      throw error;
+    }
+    await logAudit(env, auth.user.id, "TEAM_ASSIGNMENT_UPDATE", JSON.stringify({eventId,userId,roleId,status:body.status,isLeader}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/team-cancel" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.userId) ||
+        !isPositiveInteger(body.roleId)) return json({ error: "Escalação inválida." }, 400);
+    const eventId = Number(body.eventId);
+    const userId = Number(body.userId);
+    const roleId = Number(body.roleId);
+    const current = await env.DB.prepare(
+      "SELECT status FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
+    ).bind(eventId,userId,roleId).first();
+    if (!current) return json({ error: "Escalação não encontrada." }, 404);
+    if (current.status === "declined") return json({ error: "Esta escalação já está cancelada." }, 409);
+    await env.DB.prepare(
+      `UPDATE team_assignments SET status='declined',updated_at=CURRENT_TIMESTAMP
+       WHERE event_id=? AND user_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')`
+    ).bind(eventId,userId,roleId).run();
+    await logAudit(env,auth.user.id,"TEAM_ASSIGNMENT_CANCEL",JSON.stringify({eventId,userId,roleId,previousStatus:current.status}));
+    return json({ ok:true });
+  }
+
+  if (url.pathname === "/api/team-confirmation" && request.method === "POST") {
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.roleId) ||
+        typeof body.confirm !== "boolean") return json({ error: "Confirmação inválida." }, 400);
+    const eventId = Number(body.eventId);
+    const roleId = Number(body.roleId);
+    const assignment = await env.DB.prepare(
+      "SELECT status,is_leader FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
+    ).bind(eventId,auth.user.id,roleId).first();
+    if (!assignment) return json({ error: "Você não possui esta escalação." }, 404);
+    if (!["proposed","reserved","confirmed"].includes(assignment.status)) {
+      return json({ error: "Esta escalação não pode ser alterada." }, 409);
+    }
+    if (body.confirm && assignment.status === "proposed") return json({ error: "A escalação ainda aguarda aprovação do administrador." }, 409);
+    if (body.confirm) {
+      const eligible = await env.DB.prepare(
+        `SELECT u.active AS member_active,r.active AS role_active,
+                CASE WHEN mr.user_id IS NULL THEN 0 ELSE 1 END AS eligible,
+                COALESCE(av.available,0) AS available
+         FROM users u JOIN ministry_roles r ON r.id=?
+         LEFT JOIN member_roles mr ON mr.user_id=u.id AND mr.role_id=r.id
+         LEFT JOIN availability av ON av.user_id=u.id AND av.event_id=?
+         WHERE u.id=?`
+      ).bind(roleId,eventId,auth.user.id).first();
+      if (!eligible?.member_active || !eligible?.role_active || !eligible?.eligible || !eligible?.available) {
+        return json({ error: "Não é possível confirmar uma função ou disponibilidade que deixou de ser válida." }, 409);
+      }
+    }
+    const status = body.confirm ? "confirmed" : "declined";
+    if (body.confirm && assignment.is_leader) {
+      const leader = await env.DB.prepare(
+        `SELECT 1 AS ok FROM team_assignments
+         WHERE event_id=? AND is_leader=1 AND status IN ('reserved','confirmed')
+         AND NOT (user_id=? AND role_id=?) LIMIT 1`
+      ).bind(eventId,auth.user.id,roleId).first();
+      if (leader) return json({ error: "Já existe liderança reservada ou confirmada." }, 409);
+    }
+    try {
+      await env.DB.prepare(
+        "UPDATE team_assignments SET status=?,updated_at=CURRENT_TIMESTAMP WHERE event_id=? AND user_id=? AND role_id=?"
+      ).bind(status,eventId,auth.user.id,roleId).run();
+    } catch (error) {
+      if (/UNIQUE constraint/i.test(String(error))) return json({ error: "Conflito na confirmação de liderança." }, 409);
+      throw error;
+    }
+    await logAudit(env,auth.user.id,"TEAM_CONFIRMATION",JSON.stringify({eventId,roleId,status}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/team-suggestions" && request.method === "GET") {
+    requireAdmin(auth);
+    const rawEventId = url.searchParams.get("eventId");
+    if (!isPositiveInteger(rawEventId)) return json({ error: "Evento inválido." }, 400);
+    const eventId = Number(rawEventId);
+    const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
+    if (!event) return json({ error: "Evento não encontrado." }, 404);
+
+    const requirements = (await env.DB.prepare(
+      `SELECT r.role_id AS roleId,r.slots,
+              CASE WHEN mr.code='leader' THEN 1 ELSE 0 END AS isLeader
+       FROM event_role_requirements r JOIN ministry_roles mr ON mr.id=r.role_id
+       WHERE r.event_id=? AND mr.active=1 ORDER BY r.role_id`
+    ).bind(eventId).all()).results.map(x=>({
+      roleId: Number(x.roleId),slots:Number(x.slots),isLeader:Boolean(x.isLeader)
+    }));
+    const candidates = (await env.DB.prepare(
+      `SELECT mr.user_id AS userId,mr.role_id AS roleId,
+              u.active AS active,
+              COALESCE(av.available,0) AS available,
+              (SELECT COUNT(*) FROM team_assignments ta
+               JOIN events history_event ON history_event.id=ta.event_id
+               JOIN events target_event ON target_event.id=?
+               WHERE ta.user_id=mr.user_id
+                 AND ta.status IN ('reserved','confirmed')
+                 AND history_event.event_date < target_event.event_date
+                 AND history_event.event_date >= date(target_event.event_date,'-90 days')) AS recentAssignments
+       FROM member_roles mr
+       JOIN users u ON u.id=mr.user_id
+       JOIN ministry_roles r ON r.id=mr.role_id AND r.active=1
+       LEFT JOIN availability av ON av.user_id=mr.user_id AND av.event_id=?
+       WHERE u.active=1 ORDER BY mr.user_id,mr.role_id`
+    ).bind(eventId,eventId).all()).results.map(x=>({
+      userId:Number(x.userId),roleId:Number(x.roleId),
+      active:Boolean(x.active),available:Boolean(x.available),
+      recentAssignments:Number(x.recentAssignments)
+    }));
+    const existing = (await env.DB.prepare(
+      "SELECT user_id AS userId,role_id AS roleId,status,is_leader AS isLeader FROM team_assignments WHERE event_id=?"
+    ).bind(eventId).all()).results.map(x=>({
+      userId:Number(x.userId),roleId:Number(x.roleId),
+      status:x.status,isLeader:Boolean(x.isLeader)
+    }));
+    const suggestions = suggestTeam({requirements,candidates,existing});
+    return json({ eventId, suggestions, saved: false, requiresApproval: true });
+  }
+
+  if (url.pathname === "/api/admin/member-role" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.userId) || !isPositiveInteger(body.roleId) ||
+        typeof body.enabled !== "boolean") {
+      return json({ error: "Dados de função inválidos." }, 400);
+    }
+    const userId = Number(body.userId);
+    const roleId = Number(body.roleId);
+    const member = await env.DB.prepare("SELECT id,active FROM users WHERE id=?").bind(userId).first();
+    const role = await env.DB.prepare("SELECT id,active FROM ministry_roles WHERE id=?").bind(roleId).first();
+    if (!member || !role) return json({ error: "Integrante ou função não encontrado." }, 404);
+    if (!member.active || !role.active) return json({ error: "Integrante ou função desativado." }, 400);
+    if (body.enabled) {
+      await env.DB.prepare("INSERT OR IGNORE INTO member_roles(user_id,role_id) VALUES(?,?)").bind(userId,roleId).run();
+    } else {
+      const activeAssignments = await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM team_assignments
+         WHERE user_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')`
+      ).bind(userId,roleId).first();
+      if (Number(activeAssignments?.total||0)>0) {
+        return json({ error: "A função possui escalações pendentes ou confirmadas. Resolva-as antes de desativá-la." }, 409);
+      }
+      await env.DB.prepare("DELETE FROM member_roles WHERE user_id=? AND role_id=?").bind(userId,roleId).run();
+    }
+    await logAudit(env, auth.user.id, "MEMBER_ROLE_UPDATE", JSON.stringify({userId,roleId,enabled:body.enabled}));
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/admin/event-requirement" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.roleId) ||
+        !Number.isSafeInteger(body.slots) || body.slots < 0 || body.slots > 50) {
+      return json({ error: "Formação inválida." }, 400);
+    }
+    const eventId = Number(body.eventId);
+    const roleId = Number(body.roleId);
+    const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
+    const role = await env.DB.prepare("SELECT id,active FROM ministry_roles WHERE id=?").bind(roleId).first();
+    if (!event || !role) return json({ error: "Evento ou função não encontrado." }, 404);
+    if (!role.active) return json({ error: "Função desativada." }, 400);
+    const existingSlots = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM team_assignments
+       WHERE event_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')`
+    ).bind(eventId,roleId).first();
+    if (Number(existingSlots?.total||0) > body.slots) {
+      return json({ error: "A formação não pode ter menos vagas que as escalações já existentes." }, 409);
+    }
+    await env.DB.prepare(
+      `INSERT INTO event_role_requirements(event_id,role_id,slots) VALUES(?,?,?)
+       ON CONFLICT(event_id,role_id) DO UPDATE SET slots=excluded.slots`
+    ).bind(eventId,roleId,body.slots).run();
+    await logAudit(env, auth.user.id, "EVENT_REQUIREMENT_UPDATE", JSON.stringify({eventId,roleId,slots:body.slots}));
+    return json({ ok: true });
+  }
+
   if (url.pathname === "/api/admin/users" && request.method === "POST") {
     requireAdmin(auth);
     const body = await request.json();
@@ -232,6 +484,16 @@ export async function handleApi(request, env, url) {
 
     if (!user) {
       return json({ error: "Usuário não encontrado." }, 404);
+    }
+
+    if (!active) {
+      const activeTeams = await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM team_assignments
+         WHERE user_id=? AND status IN ('proposed','reserved','confirmed')`
+      ).bind(userId).first();
+      if (Number(activeTeams?.total||0)>0) {
+        return json({ error: "Este integrante possui escalações pendentes ou confirmadas. Retire-o das equipes antes de desativar a conta." }, 409);
+      }
     }
 
     await env.DB.prepare("UPDATE users SET active=? WHERE id=?").bind(active,userId).run();

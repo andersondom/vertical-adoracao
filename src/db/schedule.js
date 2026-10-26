@@ -1,4 +1,12 @@
+import { monthInBrazil, standardServices } from "../domain/calendar.js";
 export async function getData(env, user) {
+  const month = monthInBrazil();
+  for (const service of standardServices(month)) {
+    await env.DB.prepare("INSERT OR IGNORE INTO events(event_date,day_code,title,icon) VALUES(?,?,NULL,?)")
+      .bind(service.date,service.code,service.code === 'D' ? '🙏' : '🎶').run();
+  }
+  const next = new Date(Date.UTC(month.year,month.month,1));
+  const nextKey = next.getUTCFullYear()+'-'+String(next.getUTCMonth()+1).padStart(2,'0');
   const settings = await env.DB.prepare(
     "SELECT month_label,availability_open FROM schedule_settings WHERE id=1"
   ).first();
@@ -9,8 +17,9 @@ export async function getData(env, user) {
      FROM events e
      LEFT JOIN assignments a ON a.event_id=e.id
      LEFT JOIN users u ON u.id=a.user_id
+     WHERE e.event_date >= ? AND e.event_date < ?
      ORDER BY e.event_date`
-  ).all();
+  ).bind(month.key + '-01', nextKey + '-01').all();
 
   const ownAvailability = await env.DB.prepare(
     "SELECT event_id,available FROM availability WHERE user_id=?"
@@ -33,8 +42,38 @@ export async function getData(env, user) {
     ).all()).results;
   }
 
+  const roles = (await env.DB.prepare(
+    "SELECT id,code,label,active FROM ministry_roles ORDER BY id"
+  ).all()).results;
+  const ownRoles = (await env.DB.prepare(
+    "SELECT role_id FROM member_roles WHERE user_id=?"
+  ).bind(user.id).all()).results;
+  let memberRoles = [];
+  let requirements = [];
+  let teamAssignments = [];
+  if (user.role === "admin") {
+    memberRoles = (await env.DB.prepare(
+      "SELECT mr.user_id,mr.role_id FROM member_roles mr JOIN users u ON u.id=mr.user_id ORDER BY mr.user_id,mr.role_id"
+    ).all()).results;
+    requirements = (await env.DB.prepare(
+      "SELECT event_id,role_id,slots FROM event_role_requirements ORDER BY event_id,role_id"
+    ).all()).results;
+    teamAssignments = (await env.DB.prepare(
+      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments ORDER BY event_id,user_id,role_id"
+    ).all()).results;
+  } else {
+    teamAssignments = (await env.DB.prepare(
+      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments WHERE user_id=? ORDER BY event_id,role_id"
+    ).bind(user.id).all()).results;
+  }
+
   return {
-    settings,
+    roles,
+    ownRoles,
+    memberRoles,
+    requirements,
+    teamAssignments,
+    settings: {...settings,month_label: new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(new Date(Date.UTC(month.year,month.month-1,15)))},
     events: events.results,
     ownAvailability: ownAvailability.results,
     members,
