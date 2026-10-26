@@ -1,4 +1,12 @@
+import { monthInBrazil, standardServices } from "../domain/calendar.js";
 export async function getData(env, user) {
+  const month = monthInBrazil();
+  for (const service of standardServices(month)) {
+    await env.DB.prepare("INSERT OR IGNORE INTO events(event_date,day_code,title,icon) VALUES(?,?,NULL,?)")
+      .bind(service.date,service.code,service.code === 'D' ? '🙏' : '🎶').run();
+  }
+  const next = new Date(Date.UTC(month.year,month.month,1));
+  const nextKey = next.getUTCFullYear()+'-'+String(next.getUTCMonth()+1).padStart(2,'0');
   const settings = await env.DB.prepare(
     "SELECT month_label,availability_open FROM schedule_settings WHERE id=1"
   ).first();
@@ -9,8 +17,9 @@ export async function getData(env, user) {
      FROM events e
      LEFT JOIN assignments a ON a.event_id=e.id
      LEFT JOIN users u ON u.id=a.user_id
+     WHERE e.event_date >= ? AND e.event_date < ?
      ORDER BY e.event_date`
-  ).all();
+  ).bind(month.key + '-01', nextKey + '-01').all();
 
   const ownAvailability = await env.DB.prepare(
     "SELECT event_id,available FROM availability WHERE user_id=?"
@@ -64,7 +73,7 @@ export async function getData(env, user) {
     memberRoles,
     requirements,
     teamAssignments,
-    settings,
+    settings: {...settings,month_label: new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(new Date(Date.UTC(month.year,month.month-1,15)))},
     events: events.results,
     ownAvailability: ownAvailability.results,
     members,
