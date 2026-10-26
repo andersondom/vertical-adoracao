@@ -132,10 +132,10 @@ function renderSchedule(){
     html+='</article>';
   }
   if(ME.role==='admin'){
-    html+='<div class="card"><h2>Montagem de equipes</h2>';
+    html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p>';
     for(const e of DATA.events){
       const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
-      html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.length} integrante(s) escalado(s) <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
+      html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.filter(x=>x.status!=='declined').length} integrante(s) em escalação <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
 
 
     html+=\`<div class="avail">\${team.map(x=>{
