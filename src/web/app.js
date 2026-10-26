@@ -132,7 +132,7 @@ function renderSchedule(){
     html+='</article>';
   }
   if(ME.role==='admin'){
-    html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p>';
+    html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p><button class="smallbtn" onclick="printTeamSchedule()">Imprimir equipes / salvar em PDF</button>';
     for(const e of DATA.events){
       const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
       html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.filter(x=>x.status!=='declined').length} integrante(s) em escalação <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
@@ -167,6 +167,28 @@ function renderSchedule(){
     }
   }
   id('scheduleView').innerHTML=html;
+}
+
+function printTeamSchedule(){
+  const confirmed=(DATA.teamAssignments||[]).filter(x=>x.status==='confirmed');
+  if(!confirmed.length){alert('Não há integrantes confirmados para impressão.');return;}
+  const sections=DATA.events.map(e=>{
+    const members=confirmed.filter(x=>Number(x.event_id)===Number(e.id));
+    if(!members.length)return '';
+    const rows=members.map(x=>{
+      const person=(DATA.members||[]).find(m=>Number(m.id)===Number(x.user_id));
+      const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
+      return '<tr><td>'+esc(person?.name||'Integrante')+'</td><td>'+esc(role?.label||'Função')+'</td></tr>';
+    }).join('');
+    return '<section><h2>'+esc(e.event_date)+' — '+esc(e.title||e.day_code||'Culto')+'</h2><table><thead><tr><th>Integrante</th><th>Função</th></tr></thead><tbody>'+rows+'</tbody></table></section>';
+  }).join('');
+  const popup=window.open('','_blank');
+  if(!popup){alert('Permita a abertura da janela de impressão no navegador.');return;}
+  popup.document.open();
+  popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Escalas confirmadas</title><style>body{font:16px Arial,sans-serif;margin:32px;color:#222}h1{margin-bottom:28px}section{break-inside:avoid;margin-bottom:28px}h2{font-size:18px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:9px;text-align:left}th{background:#eee}@media print{body{margin:12mm}}</style></head><body><h1>Ministério de Louvor — Escalas confirmadas</h1>'+sections+'</body></html>');
+  popup.document.close();
+  popup.focus();
+  popup.print();
 }
 
 async function updateRequirement(eventId,roleId,value){
