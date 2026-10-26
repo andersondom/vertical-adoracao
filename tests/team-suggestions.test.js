@@ -43,3 +43,21 @@ test("liderança proposta bloqueia sugestão concorrente",()=>{
   });
   assert.deepEqual(result,[]);
 });
+
+test("permite nova sugestão após recusa da escala anterior",()=>{
+  const result=suggestTeam({
+    requirements:[{roleId:1,slots:1,isLeader:false}],
+    existing:[{userId:1,roleId:1,status:"declined",isLeader:false}],
+    candidates:[role(1,1,0),role(2,1,3)]
+  });
+  assert.deepEqual(result.map(x=>x.userId),[1]);
+});
+
+test("libera a liderança após recusa",()=>{
+  const result=suggestTeam({
+    requirements:[{roleId:3,slots:1,isLeader:true}],
+    existing:[{userId:1,roleId:3,status:"declined",isLeader:true}],
+    candidates:[role(2,3,1)]
+  });
+  assert.deepEqual(result.map(x=>x.userId),[2]);
+});

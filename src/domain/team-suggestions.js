@@ -7,7 +7,7 @@ export function suggestTeam({ requirements, candidates, existing = [] }) {
     throw new TypeError("Entradas de escala inválidas.");
   }
   const chosen = [...existing];
-  const keys = new Set(chosen.map(x => `${x.userId}:${x.roleId}`));
+  const keys = new Set(chosen.filter(x => x.status !== "declined").map(x => `${x.userId}:${x.roleId}`));
   const scores = new Map();
   for (const person of candidates) {
     if (!Number.isSafeInteger(person.userId) || person.userId <= 0 ||
