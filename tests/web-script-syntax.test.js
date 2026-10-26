@@ -22,8 +22,8 @@ test("montagem da equipe e confirmação administrativa existem na interface", (
 
 test("exportação de equipes exige confirmação e oferece impressão em PDF",()=>{
   const html=appHtml();
-  assert.match(html,/function printTeamSchedule\\(/);
+  assert.match(html,/function printTeamSchedule\(/);
   assert.match(html,/x.status==='confirmed'/);
-  assert.match(html,/popup\\.print\\(\\)/);
-  assert.match(html,/Imprimir equipes \\/ salvar em PDF/);
+  assert.match(html,/popup\.print\(\)/);
+  assert.match(html,/Imprimir equipes \/ salvar em PDF/);
 });
