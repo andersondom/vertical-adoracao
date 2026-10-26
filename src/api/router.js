@@ -486,6 +486,16 @@ export async function handleApi(request, env, url) {
       return json({ error: "Usuário não encontrado." }, 404);
     }
 
+    if (!active) {
+      const activeTeams = await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM team_assignments
+         WHERE user_id=? AND status IN ('proposed','reserved','confirmed')`
+      ).bind(userId).first();
+      if (Number(activeTeams?.total||0)>0) {
+        return json({ error: "Este integrante possui escalações pendentes ou confirmadas. Retire-o das equipes antes de desativar a conta." }, 409);
+      }
+    }
+
     await env.DB.prepare("UPDATE users SET active=? WHERE id=?").bind(active,userId).run();
     if (!active) await env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(userId).run();
     await logAudit(env, auth.user.id, "USER_STATE", JSON.stringify({userId,active}));
