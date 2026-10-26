@@ -136,13 +136,14 @@ function renderSchedule(){
     for(const e of DATA.events){
       const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
       html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.length} integrante(s) escalado(s) <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
+
+
     html+=\`<div class="avail">\${team.map(x=>{
       const member=(DATA.members||[]).find(m=>Number(m.id)===Number(x.user_id));
       const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
       return '<div class="row"><span>'+esc(member?.name||'Integrante')+' — '+esc(role?.label||'Função')+' ('+esc(x.status)+')</span>'+
         (x.status==='proposed'?'<button class="smallbtn" onclick="approveTeam('+Number(e.id)+','+Number(x.user_id)+','+Number(x.role_id)+','+Boolean(x.is_leader)+')">Aprovar reserva</button>':'')+'</div>';
     }).join('')}</div>\`;
-
     }
     html+='<div class="avail"><strong>Formação desejada por evento</strong></div>';
     for(const e of DATA.events){
