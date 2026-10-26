@@ -142,7 +142,8 @@ function renderSchedule(){
       const member=(DATA.members||[]).find(m=>Number(m.id)===Number(x.user_id));
       const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
       return '<div class="row"><span>'+esc(member?.name||'Integrante')+' — '+esc(role?.label||'Função')+' ('+esc(x.status)+')</span>'+
-        (x.status==='proposed'?'<button class="smallbtn" onclick="approveTeam('+Number(e.id)+','+Number(x.user_id)+','+Number(x.role_id)+','+Boolean(x.is_leader)+')">Aprovar reserva</button>':'')+'</div>';
+        (x.status==='proposed'?'<button class="smallbtn" onclick="approveTeam('+Number(e.id)+','+Number(x.user_id)+','+Number(x.role_id)+','+Boolean(x.is_leader)+')">Aprovar reserva</button>':'')+
+        (x.status!=='declined'?'<button class="smallbtn alt" onclick="cancelTeam('+Number(e.id)+','+Number(x.user_id)+','+Number(x.role_id)+')">Retirar da equipe</button>':'')+'</div>';
     }).join('')}</div>\`;
     }
     html+='<div class="avail"><strong>Formação desejada por evento</strong></div>';
@@ -186,6 +187,11 @@ async function previewTeam(eventId){
       return \`<div class="row"><span>\${esc(member?.name||'Integrante')} — \${esc(role?.label||'Função')}</span><button class="smallbtn" onclick="saveSuggestion(\${eventId},\${x.userId},\${x.roleId},\${x.isLeader})">Propor</button></div>\`;
     }).join('');
   }catch(e){target.textContent=e.message}
+}
+async function cancelTeam(eventId,userId,roleId){
+  if(!confirm('Retirar este integrante da equipe? A vaga ficará disponível para substituição.')) return;
+  try{await api('/api/admin/team-cancel',{method:'POST',body:JSON.stringify({eventId,userId,roleId})});await reloadData()}
+  catch(e){alert(e.message)}
 }
 async function approveTeam(eventId,userId,roleId,isLeader){
   try{await api('/api/admin/team-assignment',{method:'POST',body:JSON.stringify({eventId,userId,roleId,isLeader,status:'reserved'})});await reloadData()}

@@ -266,6 +266,27 @@ export async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
+  if (url.pathname === "/api/admin/team-cancel" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.userId) ||
+        !isPositiveInteger(body.roleId)) return json({ error: "Escalação inválida." }, 400);
+    const eventId = Number(body.eventId);
+    const userId = Number(body.userId);
+    const roleId = Number(body.roleId);
+    const current = await env.DB.prepare(
+      "SELECT status FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
+    ).bind(eventId,userId,roleId).first();
+    if (!current) return json({ error: "Escalação não encontrada." }, 404);
+    if (current.status === "declined") return json({ error: "Esta escalação já está cancelada." }, 409);
+    await env.DB.prepare(
+      `UPDATE team_assignments SET status='declined',updated_at=CURRENT_TIMESTAMP
+       WHERE event_id=? AND user_id=? AND role_id=? AND status IN ('proposed','reserved','confirmed')`
+    ).bind(eventId,userId,roleId).run();
+    await logAudit(env,auth.user.id,"TEAM_ASSIGNMENT_CANCEL",JSON.stringify({eventId,userId,roleId,previousStatus:current.status}));
+    return json({ ok:true });
+  }
+
   if (url.pathname === "/api/team-confirmation" && request.method === "POST") {
     const body = await request.json();
     if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.roleId) ||
