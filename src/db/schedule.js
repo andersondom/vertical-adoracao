@@ -1,7 +1,8 @@
 import { monthInBrazil, standardServices } from "../domain/calendar.js";
-export async function getData(env, user) {
-  const month = monthInBrazil();
-  for (const service of standardServices(month)) {
+export async function getData(env, user, requestedMonth = null) {
+  const current = monthInBrazil();
+  const month = requestedMonth ? {year:Number(requestedMonth.slice(0,4)),month:Number(requestedMonth.slice(5,7)),key:requestedMonth} : current;
+  if (month.key === current.key) for (const service of standardServices(month)) {
     await env.DB.prepare("INSERT OR IGNORE INTO events(event_date,day_code,title,icon) VALUES(?,?,NULL,?)")
       .bind(service.date,service.code,service.code === 'D' ? '🙏' : '🎶').run();
   }
@@ -73,6 +74,7 @@ export async function getData(env, user) {
     memberRoles,
     requirements,
     teamAssignments,
+    selectedMonth: month.key,
     settings: {...settings,month_label: new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(new Date(Date.UTC(month.year,month.month-1,15)))},
     events: events.results,
     ownAvailability: ownAvailability.results,
