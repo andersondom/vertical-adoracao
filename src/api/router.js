@@ -77,7 +77,9 @@ export async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/data" && request.method === "GET") {
-    return json(await getData(env, auth.user));
+    const month = url.searchParams.get("month");
+    if (month && (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month) || Number(month.slice(0,4)) < 2000 || Number(month.slice(0,4)) > 2100)) return json({ error: "Mês inválido." }, 400);
+    return json(await getData(env, auth.user, month));
   }
 
   if (url.pathname === "/api/availability" && request.method === "POST") {
