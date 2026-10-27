@@ -8,7 +8,7 @@ Origem: resultados fornecidos pelo responsável após testes manuais.
 | Nº | Critério | Resultado |
 | --- | --- | --- |
 | 1 | Sistema abre pelo endereço de homologação | Funcionou |
-| 2 | Login funciona e permite acessar o sistema | Não testado |
+| 2 | Login funciona e permite acessar o sistema | Funcionou |
 | 3 | Menu e navegação apresentam a nova interface | Funcionou |
 | 4 | Escalas aparecem com boa distribuição dos campos | Funcionou |
 | 5 | Consulta e alteração da disponibilidade | Funcionou |
@@ -20,10 +20,9 @@ Origem: resultados fornecidos pelo responsável após testes manuais.
 Observações: nenhuma.
 
 ## Avaliação
-- 8 aprovados, 0 falhas relatadas, 1 não testado.
-- Aprovação visual e dos fluxos exercitados; homologação funcional **parcial**.
-- Login não testado: validar autenticação, saída e acesso após encerramento da sessão com usuário de teste, antes da liberação para produção.
-- Não inferir aprovação de autenticação a partir do uso de outras telas.
+- 9 aprovados, 0 falhas relatadas, 0 pendentes.
+- Autenticação validada adicionalmente pelo responsável: acesso inicial exige login; login permite visualizar escalas; saída encerra a sessão; acesso a página interna após sair exige novo login.
+- Homologação funcional e visual **aprovada** conforme os critérios manuais definidos.
 
 ## Controle de mudança
 - Não realizar merge do PR #3 nem deploy de produção antes da aprovação explícita.
