@@ -39,6 +39,15 @@ jobs:
           "
       - name: Compilar Worker de homologacao
         run: npx wrangler deploy --config wrangler.staging.jsonc --dry-run --outdir /tmp/staging-build
+      - name: Verificar disponibilidade do token sem revelar seu valor
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN nao esta disponivel. Confira Settings > Secrets and variables > Actions > Repository secrets; se estiver em Environment secrets, configure o environment neste job."
+            exit 1
+          fi
+          echo "Token de autenticacao disponivel para o deploy."
       - name: Publicar somente Worker de homologacao (sem migracoes D1)
         run: npx wrangler deploy --config wrangler.staging.jsonc
         env:
