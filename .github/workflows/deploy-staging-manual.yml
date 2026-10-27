@@ -1,0 +1,46 @@
+name: Publicar homologacao Vertical Adoracao
+run-name: Homologacao manual - Vertical Adoracao
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vertical-adoracao-staging
+  cancel-in-progress: false
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout versao aprovada para homologacao
+        uses: actions/checkout@v4
+        with:
+          ref: 04a1e6b38974866b6d04d128c38f3178bd961b97
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-staging-config.mjs
+      - run: node scripts/check-local-only.mjs
+      - run: npm run db:local
+      - run: npm run seed:local
+      - run: npm test
+        env:
+          RUN_D1_INTEGRATION: '1'
+      - name: Preparar configuracao exclusiva de homologacao
+        run: node scripts/prepare-staging-config.mjs
+      - name: Conferir nomes e banco antes de publicar
+        run: |
+          node --input-type=module -e "
+          import {readFileSync} from 'node:fs';
+          const c=JSON.parse(readFileSync('wrangler.staging.jsonc','utf8'));
+          if(c.name!=='ministerio-louvor-staging'||c.d1_databases?.[0]?.binding!=='DB'||c.d1_databases?.[0]?.database_name!=='louvor-staging'||c.d1_databases?.[0]?.database_id!=='a5a48f44-69dd-4040-ba03-25b36197a07b') process.exit(1);
+          "
+      - name: Compilar Worker de homologacao
+        run: npx wrangler deploy --config wrangler.staging.jsonc --dry-run --outdir /tmp/staging-build
+      - name: Publicar somente Worker de homologacao (sem migracoes D1)
+        run: npx wrangler deploy --config wrangler.staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 6ccd7d1ad5bacea7eefe1d2a4e82eccc
