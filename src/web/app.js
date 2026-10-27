@@ -16,10 +16,50 @@ input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:10px
 .tag{padding:4px 8px;background:#eef2ff;border-radius:999px;font-size:12px}.avail{margin-top:8px;padding:8px;background:#f9fafb;border-radius:8px}
 .smallbtn{padding:6px 9px;font-size:12px}.checkbox{width:auto}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 @media(max-width:700px){.g2{grid-template-columns:1fr}.wrap{padding:12px}}
+
+:root{--ink:#243247;--sub:#64748b;--accent:#2563eb;--line:#e2e8f0}
+body{background:#f5f7fb;color:var(--ink);line-height:1.5}
+header{background:#fff;color:var(--ink);border-bottom:1px solid var(--line);padding:0;box-shadow:0 2px 12px #0f172a09}
+.wrap{max-width:1180px;padding:20px 24px}header .wrap{min-height:72px}
+.brand{display:flex;align-items:center;gap:12px;font-size:17px}.brand-icon{display:grid;place-items:center;background:#e8efff;width:42px;height:42px;border-radius:13px;font-size:22px}
+#topUser{font-size:13px;color:var(--sub)}
+.card{border:1px solid var(--line);border-radius:16px;padding:20px 22px;box-shadow:0 4px 18px #1f293709;margin:14px 0}
+h1,h2{letter-spacing:-.03em;line-height:1.25}h1{font-size:clamp(22px,3vw,29px)}h2{font-size:19px;margin-top:0}
+.title{font-size:17px}.muted{color:var(--sub)}
+button{background:var(--accent);font-weight:650;min-height:40px;transition:background .15s}
+button:hover{background:#1d4ed8}button.alt{background:#edf2f8;color:#334155}button.alt:hover{background:#dce7f5}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+input,select{width:100%;max-width:100%;min-height:40px;padding:9px 11px;background:white;border-color:#cbd5e1;font:inherit;font-size:14px}
+input[type=checkbox]{width:17px;height:17px;min-height:17px;margin:0;accent-color:var(--accent)}
+label{font-size:13px;color:#334155;display:block}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.form-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:13px 16px}
+.form-grid>*{grid-column:span 6;min-width:0}.form-grid .span-2{grid-column:span 2}.form-grid .span-3{grid-column:span 3}.form-grid .span-4{grid-column:span 4}.form-grid .span-6{grid-column:span 6}.form-grid .span-8{grid-column:span 8}
+.tabs{gap:6px;padding:6px;background:#eaf0f8;border-radius:14px;margin:16px 0 20px;width:fit-content;max-width:100%}
+.tabs button{background:transparent;color:#526176;border-radius:10px;padding:10px 15px}
+.tabs button:hover{background:#dce7f5;color:#1e40af}.tabs button.active{background:#fff;color:#1d4ed8;box-shadow:0 2px 7px #0f172a16}
+.hero{background:linear-gradient(110deg,#fff 20%,#edf4ff);border-color:#dce7f8}.hero .tag{background:#e0ecff;color:#1d4ed8;font-weight:700}
+.schedule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:stretch}
+.schedule-grid>.card{margin:0;min-width:0}
+.event-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.event-title{font-weight:650;margin-top:3px}.event-meta{margin-top:5px}
+.availability-toggle{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #dbe5f2;border-radius:10px;background:#f7faff;white-space:nowrap;font-size:12px;cursor:pointer}
+.event-controls{display:grid;gap:10px;margin-top:13px}
+.avail{background:#f7f9fd;border:1px solid #e8eef6;padding:10px 12px;border-radius:10px;overflow-wrap:anywhere}
+.requirement-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:9px}
+.requirement-item{display:inline-flex;align-items:center;gap:8px;margin:4px 6px 4px 0;font-weight:500}
+.requirement-item input{width:66px;min-height:34px;padding:5px 7px;margin:0;text-align:center}
+.requirement-grid .avail{margin:0}.requirement-grid label{display:inline-flex;align-items:center;gap:8px;font-weight:500;margin:5px 8px 5px 0}
+.requirement-grid input[type=number]{width:66px!important;min-height:34px;padding:5px 7px;margin:0;text-align:center}
+.smallbtn{font-size:12px;padding:7px 10px;min-height:34px}
+#usersView .card.row{align-items:flex-start}#usersView .card.row>div:first-child{flex:1;min-width:200px}
+#usersView .avail label{display:inline-flex;align-items:center;gap:5px;margin:4px 9px 4px 0;font-weight:500}
+@media(max-width:900px){.schedule-grid{grid-template-columns:1fr}.wrap{padding:16px}}
+@media(max-width:700px){.g2{grid-template-columns:1fr}.wrap{padding:12px}.card{padding:16px}.form-grid>*{grid-column:span 12!important}.tabs{width:100%}.tabs button{flex:1;padding:9px 7px;font-size:13px}.event-head{flex-wrap:wrap}.availability-toggle{width:100%;justify-content:center}.brand{font-size:15px}header .wrap{min-height:62px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}}
 </style>
 </head>
 <body>
-<header><div class="wrap row"><strong>🎶 Ministério de Louvor</strong><div id="topUser"></div></div></header>
+<header><div class="wrap row"><div class="brand"><span class="brand-icon" aria-hidden="true">🎶</span><strong>Ministério de Louvor</strong></div><div id="topUser"></div></div></header>
 <main class="wrap">
 <section id="loading" class="card">Carregando...</section>
 
@@ -45,12 +85,12 @@ input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:10px
 </section>
 
 <section id="app" class="hidden">
-<div class="card row"><div><h1 id="month" style="margin:0"></h1><div id="welcome" class="muted"></div></div><div class="row"><span id="roleTag" class="tag"></span><button class="alt" onclick="logout()">Sair</button></div></div>
-<div id="adminTabs" class="tabs hidden">
-<button onclick="showView('schedule')">📅 Escala</button>
-<button onclick="showView('users')">👥 Integrantes</button>
-<button onclick="showView('settings')">⚙️ Configurações</button>
-</div>
+<div class="card row hero"><div><h1 id="month" style="margin:0"></h1><div id="welcome" class="muted"></div></div><div class="row"><span id="roleTag" class="tag"></span><button class="alt" onclick="logout()">Sair</button></div></div>
+<nav id="adminTabs" class="tabs hidden" aria-label="Seções do sistema">
+<button data-view="schedule" aria-controls="scheduleView" onclick="showView('schedule')">📅 Escala</button>
+<button data-view="users" aria-controls="usersView" onclick="showView('users')">👥 Integrantes</button>
+<button data-view="settings" aria-controls="settingsView" onclick="showView('settings')">⚙️ Configurações</button>
+</nav>
 <div id="scheduleView"></div>
 <div id="usersView" class="hidden"></div>
 <div id="settingsView" class="hidden"></div>
@@ -105,25 +145,25 @@ async function loadApp(){
   id('topUser').textContent=ME.name;
   if(ME.role==='admin') show('adminTabs');
   renderSchedule();
-  if(ME.role==='admin'){renderUsers();renderSettings();}
+  if(ME.role==='admin'){renderUsers();renderSettings();showView('schedule');}
 }
 
 function renderSchedule(){
   const own=new Set(DATA.ownAvailability.filter(x=>x.available).map(x=>Number(x.event_id)));
-  let html='';
+  let html='<div class="schedule-grid">';
   for(const e of DATA.events){
     const available=(DATA.allAvailability||[]).filter(a=>Number(a.event_id)===Number(e.id));
-    html+=\`<article class="card">
-      <div class="row">
+    html+=\`<article class="card event-card">
+      <div class="event-head">
        <div><div class="title">\${esc(e.icon)} \${e.event_date.slice(8,10)} – \${esc(e.day_code)} –</div>
        \${e.title?'<div><strong>'+esc(e.title)+'</strong></div>':''}
        <div class="muted">\${e.assigned_name?'✅ Escalado: '+esc(e.assigned_name):'⚪ Sem responsável definido'}</div></div>
-       <label style="font-weight:500"><input class="checkbox" type="checkbox" \${own.has(Number(e.id))?'checked':''} \${(!DATA.settings.availability_open&&ME.role!=='admin')?'disabled':''}
+       <label class="availability-toggle"><input class="checkbox" type="checkbox" \${own.has(Number(e.id))?'checked':''} \${(!DATA.settings.availability_open&&ME.role!=='admin')?'disabled':''}
        onchange="setAvailability(\${e.id},this.checked)"> Estou disponível</label>
       </div>\`;
     if(ME.role==='admin'){
       html+=\`<div class="avail"><strong>Disponíveis:</strong> \${available.length?available.map(a=>esc(a.name)).join(', '):'ninguém marcou'}</div>
-      <div style="margin-top:10px"><label>Responsável oficial
+      <div class="event-controls"><label>Responsável oficial
        <select onchange="assign(\${e.id},this.value)">
         <option value="">— Não definido —</option>
         \${DATA.members.filter(m=>m.active).map(m=>\`<option value="\${m.id}" \${Number(e.assigned_user_id)===Number(m.id)?'selected':''}>\${esc(m.name)}</option>\`).join('')}
@@ -131,6 +171,7 @@ function renderSchedule(){
     }
     html+='</article>';
   }
+  html+='</div>';
   if(ME.role==='admin'){
     html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p><button class="smallbtn" onclick="printTeamSchedule()">Imprimir equipes / salvar em PDF</button>';
     for(const e of DATA.events){
@@ -146,14 +187,14 @@ function renderSchedule(){
         (x.status!=='declined'?'<button class="smallbtn alt" onclick="cancelTeam('+Number(e.id)+','+Number(x.user_id)+','+Number(x.role_id)+')">Retirar da equipe</button>':'')+'</div>';
     }).join('')}</div>\`;
     }
-    html+='<div class="avail"><strong>Formação desejada por evento</strong></div>';
+    html+='<div class="avail"><strong>Formação desejada por evento</strong></div><div class="requirement-grid">';
     for(const e of DATA.events){
       html+='<div class="avail">'+esc(e.event_date)+': '+(DATA.roles||[]).filter(r=>r.active).map(r=>{
         const req=(DATA.requirements||[]).find(x=>Number(x.event_id)===Number(e.id)&&Number(x.role_id)===Number(r.id));
         return '<label style="display:inline-block;margin:5px">'+esc(r.label)+' <input type="number" min="0" max="50" style="width:65px" value="'+Number(req?.slots||0)+'" onchange="updateRequirement('+Number(e.id)+','+Number(r.id)+',this.value)"></label>';
       }).join('')+'</div>';
     }
-    html+='</div>';
+    html+='</div></div>';
   } else {
     const team=DATA.teamAssignments||[];
     if(team.length){
@@ -240,10 +281,10 @@ async function assign(eventId,userId){
 function renderUsers(){
   id('usersView').innerHTML=\`
   <div class="card"><h2>👥 Cadastrar integrante</h2>
-  <div class="grid g2">
-   <label>Nome<input id="uName"></label><label>E-mail<input id="uEmail" type="email"></label>
-   <label>Senha inicial<input id="uPass" type="password" minlength="8"></label>
-   <label>Perfil<select id="uRole"><option value="member">Integrante</option><option value="admin">Administrador</option></select></label>
+  <div class="form-grid">
+   <label class="span-4">Nome<input id="uName"></label><label class="span-8">E-mail<input id="uEmail" type="email"></label>
+   <label class="span-6">Senha inicial<input id="uPass" type="password" minlength="8"></label>
+   <label class="span-6">Perfil<select id="uRole"><option value="member">Integrante</option><option value="admin">Administrador</option></select></label>
   </div><br><button onclick="createUser()">Cadastrar</button><p id="uMsg"></p></div>
   \${DATA.members.map(u=>\`<div class="card row"><div><strong>\${esc(u.name)}</strong><div class="muted">\${esc(u.email)} · \${u.role==='admin'?'Administrador':'Integrante'} · \${u.active?'Ativo':'Desativado'}</div><div class="avail"><strong>Funções:</strong> \${(DATA.roles||[]).filter(r=>r.active).map(r=>\`<label style="font-weight:400;margin:6px"><input class="checkbox" type="checkbox" \${(DATA.memberRoles||[]).some(m=>Number(m.user_id)===Number(u.id)&&Number(m.role_id)===Number(r.id))?'checked':''} onchange="updateMemberRole(\${u.id},\${r.id},this.checked)"> \${esc(r.label)}</label>\`).join('')}</div></div><div class="row">
   <button class="smallbtn alt" onclick="resetPass(\${u.id})">Alterar senha</button>
@@ -279,7 +320,7 @@ function renderSettings(){
   <button onclick="toggleWindow(\${DATA.settings.availability_open?0:1})">\${DATA.settings.availability_open?'Fechar período':'Reabrir período'}</button>
   </div>
   <div class="card"><h2>➕ Novo evento</h2>
-  <div class="grid g2"><label>Data<input id="eDate" type="date"></label><label>Código do dia<input id="eDay" placeholder="Q, S, D, Sx"></label><label>Título<input id="eTitle"></label><label>Emoji<input id="eIcon" value="🎶"></label></div><br>
+  <div class="form-grid"><label class="span-3">Data<input id="eDate" type="date"></label><label class="span-3">Código do dia<input id="eDay" placeholder="Q, S, D, Sx"></label><label class="span-4">Título<input id="eTitle"></label><label class="span-2">Emoji<input id="eIcon" value="🎶"></label></div><br>
   <button onclick="createScheduleEvent()">Adicionar evento</button><p id="eMsg"></p></div>\`;
 }
 async function toggleWindow(open){
@@ -294,7 +335,7 @@ async function createScheduleEvent(){
 }
 
 async function reloadData(){DATA=await api('/api/data');renderSchedule();if(ME.role==='admin'){renderUsers();renderSettings();}}
-function showView(v){for(const x of ['schedule','users','settings']) id(x+'View').classList.toggle('hidden',x!==v)}
+function showView(v){for(const x of ['schedule','users','settings']) id(x+'View').classList.toggle('hidden',x!==v);document.querySelectorAll('#adminTabs [data-view]').forEach(b=>{const selected=b.dataset.view===v;b.classList.toggle('active',selected);b.setAttribute('aria-current',selected?'page':'false')})}
 function id(x){return document.getElementById(x)} function val(x){return id(x).value}
 function show(x){id(x).classList.remove('hidden')} function hide(x){id(x).classList.add('hidden')}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
