@@ -15,7 +15,7 @@ jobs:
       - name: Checkout versao aprovada para homologacao
         uses: actions/checkout@v4
         with:
-          ref: 2d5db0e61ed494019bec5ed6511f67eb1426cae1
+          ref: 8680bf004c747315915b708cd40f3968e0a33afc
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
