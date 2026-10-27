@@ -91,6 +91,7 @@ label{font-size:13px;color:#334155;display:block}.g2{grid-template-columns:repea
 <button data-view="users" aria-controls="usersView" onclick="showView('users')">👥 Integrantes</button>
 <button data-view="settings" aria-controls="settingsView" onclick="showView('settings')">⚙️ Configurações</button>
 </nav>
+<div class="card row"><label for="scheduleMonth">Consultar escalas por mês <input id="scheduleMonth" type="month" min="2000-01" max="2100-12" onchange="changeScheduleMonth(this.value)"></label><button class="alt" onclick="changeScheduleMonth(currentMonth())">Mês atual</button></div>
 <div id="scheduleView"></div>
 <div id="usersView" class="hidden"></div>
 <div id="settingsView" class="hidden"></div>
@@ -99,6 +100,8 @@ label{font-size:13px;color:#334155;display:block}.g2{grid-template-columns:repea
 
 <script>
 let ME=null, DATA=null;
+function currentMonth(){const p=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value;}
+async function changeScheduleMonth(month){if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))return;try{DATA=await api("/api/data?month="+encodeURIComponent(month));id("month").textContent=DATA.settings.month_label;id("scheduleMonth").value=DATA.selectedMonth;renderSchedule();if(ME.role==="admin"){renderUsers();renderSettings();}}catch(e){alert(e.message);}}
 
 async function api(path, options={}){
   const r=await fetch(path,{headers:{'content-type':'application/json',...(options.headers||{})},...options});
@@ -138,7 +141,7 @@ async function logout(){
 }
 
 async function loadApp(){
-  DATA=await api('/api/data'); hide('loading'); hide('login'); show('app');
+  DATA=await api('/api/data'); id("scheduleMonth").value=DATA.selectedMonth; hide('loading'); hide('login'); show('app');
   id('month').textContent=DATA.settings.month_label;
   id('welcome').textContent='Olá, '+ME.name+'.';
   id('roleTag').textContent=ME.role==='admin'?'Administrador':'Integrante';
