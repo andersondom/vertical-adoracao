@@ -337,7 +337,14 @@ async function createScheduleEvent(){
   }catch(e){msg.textContent=e.message;msg.className='err'}
 }
 
-async function reloadData(){DATA=await api('/api/data');renderSchedule();if(ME.role==='admin'){renderUsers();renderSettings();}}
+async function reloadData(){
+  const month=DATA?.selectedMonth;
+  DATA=await api('/api/data'+(month?'?month='+encodeURIComponent(month):''));
+  id('month').textContent=DATA.settings.month_label;
+  id('scheduleMonth').value=DATA.selectedMonth;
+  renderSchedule();
+  if(ME.role==='admin'){renderUsers();renderSettings();}
+}
 function showView(v){for(const x of ['schedule','users','settings']) id(x+'View').classList.toggle('hidden',x!==v);document.querySelectorAll('#adminTabs [data-view]').forEach(b=>{const selected=b.dataset.view===v;b.classList.toggle('active',selected);b.setAttribute('aria-current',selected?'page':'false')})}
 function id(x){return document.getElementById(x)} function val(x){return id(x).value}
 function show(x){id(x).classList.remove('hidden')} function hide(x){id(x).classList.add('hidden')}
