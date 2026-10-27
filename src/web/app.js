@@ -48,6 +48,8 @@ label{font-size:13px;color:#334155;display:block}.g2{grid-template-columns:repea
 .requirement-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:9px}
 .requirement-item{display:inline-flex;align-items:center;gap:8px;margin:4px 6px 4px 0;font-weight:500}
 .requirement-item input{width:66px;min-height:34px;padding:5px 7px;margin:0;text-align:center}
+.requirement-grid .avail{margin:0}.requirement-grid label{display:inline-flex;align-items:center;gap:8px;font-weight:500;margin:5px 8px 5px 0}
+.requirement-grid input[type=number]{width:66px!important;min-height:34px;padding:5px 7px;margin:0;text-align:center}
 .smallbtn{font-size:12px;padding:7px 10px;min-height:34px}
 #usersView .card.row{align-items:flex-start}#usersView .card.row>div:first-child{flex:1;min-width:200px}
 #usersView .avail label{display:inline-flex;align-items:center;gap:5px;margin:4px 9px 4px 0;font-weight:500}
@@ -185,14 +187,14 @@ function renderSchedule(){
         (x.status!=='declined'?'<button class="smallbtn alt" onclick="cancelTeam('+Number(e.id)+','+Number(x.user_id)+','+Number(x.role_id)+')">Retirar da equipe</button>':'')+'</div>';
     }).join('')}</div>\`;
     }
-    html+='<div class="avail"><strong>Formação desejada por evento</strong></div>';
+    html+='<div class="avail"><strong>Formação desejada por evento</strong></div><div class="requirement-grid">';
     for(const e of DATA.events){
       html+='<div class="avail">'+esc(e.event_date)+': '+(DATA.roles||[]).filter(r=>r.active).map(r=>{
         const req=(DATA.requirements||[]).find(x=>Number(x.event_id)===Number(e.id)&&Number(x.role_id)===Number(r.id));
         return '<label style="display:inline-block;margin:5px">'+esc(r.label)+' <input type="number" min="0" max="50" style="width:65px" value="'+Number(req?.slots||0)+'" onchange="updateRequirement('+Number(e.id)+','+Number(r.id)+',this.value)"></label>';
       }).join('')+'</div>';
     }
-    html+='</div>';
+    html+='</div></div>';
   } else {
     const team=DATA.teamAssignments||[];
     if(team.length){
