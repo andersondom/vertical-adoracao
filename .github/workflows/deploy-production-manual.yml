@@ -1,0 +1,55 @@
+name: Publicar producao Vertical Adoracao
+run-name: Producao manual - Vertical Adoracao
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vertical-adoracao-production
+  cancel-in-progress: false
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout do codigo principal
+        uses: actions/checkout@v4
+        with:
+          ref: 6e9e527aaca17a8387394141fe262bf21e30c6b4
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-staging-config.mjs
+      - run: node scripts/check-local-only.mjs
+      - run: npm run db:local
+      - run: npm run seed:local
+      - run: npm test
+        env:
+          RUN_D1_INTEGRATION: '1'
+      - name: Verificar destino exclusivo de producao
+        run: |
+          node --input-type=module -e "
+          import {readFileSync} from 'node:fs';
+          const c=JSON.parse(readFileSync('wrangler.jsonc','utf8'));
+          const d=c.d1_databases?.find(x=>x.binding==='DB');
+          if(c.name!=='ministerio-louvor'||d?.database_name!=='louvor-db'||d?.database_id!=='b3205ce2-14d6-4b9f-b93f-02457fb34c62') process.exit(1);
+          "
+      - name: Compilar sem publicar
+        run: npx wrangler deploy --config wrangler.jsonc --dry-run --outdir /tmp/production-build
+      - name: Conferir credenciais sem revelar valores
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Configure CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID no environment production antes de publicar."
+            exit 1
+          fi
+      - name: Publicar Worker de producao sem migracoes D1
+        run: npx wrangler deploy --config wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
