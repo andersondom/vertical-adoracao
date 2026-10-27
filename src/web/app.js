@@ -246,11 +246,11 @@ async function previewTeam(eventId){
   target.textContent='Buscando sugestões...';
   try{
     const result=await api('/api/admin/team-suggestions?eventId='+encodeURIComponent(eventId));
-    if(!result.suggestions.length){target.textContent='Nenhum integrante elegível disponível.';return;}
+    if(!result.suggestions.length){target.textContent='Sem novas sugestões: confira as vagas por função, a disponibilidade, as funções habilitadas e as propostas já existentes.';return;}
     target.innerHTML=result.suggestions.map(x=>{
       const member=DATA.members.find(m=>Number(m.id)===Number(x.userId));
       const role=DATA.roles.find(r=>Number(r.id)===Number(x.roleId));
-      return \`<div class="row"><span>\${esc(member?.name||'Integrante')} — \${esc(role?.label||'Função')}</span><button class="smallbtn" onclick="saveSuggestion(\${eventId},\${x.userId},\${x.roleId},\${x.isLeader})">Propor</button></div>\`;
+      return \`<div class="row"><span><strong>\${esc(member?.name||'Integrante')}</strong> — \${esc(role?.label||'Função')}<br><span class="muted">Disponibilidade e função verificadas; prioridade por menor número de escalações recentes.</span></span><button class="smallbtn" onclick="saveSuggestion(\${eventId},\${x.userId},\${x.roleId},\${x.isLeader})">Propor</button></div>\`;
     }).join('');
   }catch(e){target.textContent=e.message}
 }
