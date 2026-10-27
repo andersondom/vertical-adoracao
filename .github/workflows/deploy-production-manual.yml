@@ -15,7 +15,7 @@ jobs:
       - name: Checkout do codigo principal
         uses: actions/checkout@v4
         with:
-          ref: 46a6cdd3d40d5d5123809bafcce9c125b85186f5
+          ref: 8680bf004c747315915b708cd40f3968e0a33afc
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
