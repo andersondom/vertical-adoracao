@@ -17,6 +17,8 @@ export default {
       }
 
       if (url.pathname === "/logout") {
+        if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "POST", "Cache-Control": "no-store" } });
+        if (!isAllowedMutationOrigin(request)) return json({ error: "Origem da requisição não permitida." }, 403);
         return await logout(request, env);
       }
 
