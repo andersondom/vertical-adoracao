@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { saveAttendance, closeAttendance } from '../src/db/attendance.js';
 
-function fixture({ previous = null, closed = false } = {}) {
+function fixture({ previous = null, closed = false, leader = false } = {}) {
   const batches = [];
   const env = { DB: {
     prepare(sql) {
@@ -11,6 +11,7 @@ function fixture({ previous = null, closed = false } = {}) {
         bind(...values) { this.values = values; return this; },
         async first() {
           if (sql.includes('FROM events')) return { id: 10 };
+          if (sql.includes('is_leader=1') && sql.includes('FROM team_assignments')) return leader ? { allowed: 1 } : null;
           if (sql.includes('FROM team_assignments') && sql.includes('LIMIT 1')) return { ok: 1 };
           if (sql.includes('FROM event_attendance WHERE')) return previous;
           if (sql.includes('FROM event_attendance_closures')) return closed ? { status: 'closed' } : null;
@@ -59,7 +60,7 @@ test('tentativa de correção sem motivo não grava presença nem auditoria', as
   assert.equal(batches.length, 0);
 });
 
-test('integrante não pode registrar nem encerrar presenças', async () => {
+test('integrante sem liderança não pode registrar nem encerrar presenças', async () => {
   const { env, batches } = fixture();
   await assert.rejects(
     saveAttendance(env, member, { eventId: 10, userId: 9, status: 'present', reason: 'Teste' }),
