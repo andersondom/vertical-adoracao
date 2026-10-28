@@ -56,9 +56,10 @@ test("member cannot change another user's availability when window is closed", a
 test("member-supplied userId is ignored and availability targets authenticated member", async () => {
   const DB = fakeDb();
   // Stop before mutation to inspect the identity used in the target lookup.
-  await assert.rejects(() => post("/api/availability", {
+  const response = await post("/api/availability", {
     eventId: 3, userId: 99, available: true
-  }, DB), /Unexpected mutation/);
+  }, DB);
+  assert.equal(response.status, 500);
   const lookup = DB.calls.find(c => c.sql.includes("SELECT id,active FROM users"));
   assert.deepEqual(lookup.args, [7]);
 });
