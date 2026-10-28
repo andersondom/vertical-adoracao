@@ -5,6 +5,7 @@ import { requireAdmin } from "../auth/authorization.js";
 import { json } from "../utils/http.js";
 import { logAudit } from "../db/audit.js";
 import { getData } from "../db/schedule.js";
+import { getParticipationReport } from "../db/reports.js";
 import { suggestTeam } from "../domain/team-suggestions.js";
 import { loginIdentityHash, isLoginBlocked, recordLoginFailure, clearLoginFailures } from "../auth/login-rate-limit.js";
 
@@ -80,6 +81,17 @@ export async function handleApi(request, env, url) {
     const month = url.searchParams.get("month");
     if (month && (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month) || Number(month.slice(0,4)) < 2000 || Number(month.slice(0,4)) > 2100)) return json({ error: "Mês inválido." }, 400);
     return json(await getData(env, auth.user, month));
+  }
+
+  if (url.pathname === "/api/reports/participation" && request.method === "GET") {
+    const start = url.searchParams.get("start");
+    const end = url.searchParams.get("end");
+    const memberId = url.searchParams.get("memberId");
+    if (!isValidDate(start) || !isValidDate(end) || start > end ||
+        (memberId !== null && !isPositiveInteger(memberId))) {
+      return json({ error: "Período ou integrante inválido." }, 400);
+    }
+    return json(await getParticipationReport(env, auth.user, { start, end, memberId }));
   }
 
   if (url.pathname === "/api/availability" && request.method === "POST") {
