@@ -28,3 +28,28 @@ test("authenticated POST /logout without Origin or Referer is forbidden", async 
   }), env);
   assert.equal(response.status, 403);
 });
+
+test("same-origin POST /logout invalidates session", async () => {
+  const deleted = [];
+  const db = { prepare(sql) {
+    assert.match(sql, /DELETE FROM sessions WHERE id=/);
+    return { bind(id) {
+      return { async run() { deleted.push(id); } };
+    } };
+  } };
+  const response = await worker.fetch(new Request("https://vertical.example/logout", {
+    method: "POST",
+    headers: { Origin: "https://vertical.example", Cookie: "louvor_session=example" }
+  }), { DB: db });
+  assert.equal(response.status, 302);
+  assert.deepEqual(deleted, ["example"]);
+  assert.match(response.headers.get("Set-Cookie") || "", /Max-Age=0/);
+});
+
+test("cross-origin POST /api/logout is rejected before D1 access", async () => {
+  const response = await worker.fetch(new Request("https://vertical.example/api/logout", {
+    method: "POST",
+    headers: { Origin: "https://evil.example", Cookie: "louvor_session=example" }
+  }), env);
+  assert.equal(response.status, 403);
+});
