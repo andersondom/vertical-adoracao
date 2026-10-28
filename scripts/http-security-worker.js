@@ -38,6 +38,16 @@ export default {
    missingOrigin:(await check('/api/admin/attendance','http-admin','POST',{eventId:e,userId:member.id,status:'present',reason:'teste'}))===403,
    sameOrigin:(await check('/api/admin/attendance','http-admin','POST',{eventId:e,userId:member.id,status:'present',reason:'teste'},{Origin:'http://localhost'}))===200
   };
+  const otherEvent=await env.DB.prepare("SELECT id FROM events WHERE id<>? ORDER BY id LIMIT 1").bind(e).first();
+  if(!otherEvent)return Response.json({ok:false,error:'Segundo evento ausente'},{status:409});
+  const assignment=await env.DB.prepare("SELECT role_id FROM team_assignments WHERE event_id=? AND user_id=? LIMIT 1").bind(e,member.id).first();
+  if(!assignment)return Response.json({ok:false,error:'Escalacao do integrante ausente'},{status:409});
+  await env.DB.prepare("UPDATE team_assignments SET is_leader=1,status='confirmed' WHERE event_id=? AND user_id=?").bind(e,member.id).run();
+  const leaderOwnEvent=(await check('/api/admin/attendance/event?eventId='+e,'http-member'))===200;
+  const leaderOtherEvent=(await check('/api/admin/attendance/event?eventId='+otherEvent.id,'http-member'))===403;
+  await env.DB.prepare("UPDATE team_assignments SET is_leader=0 WHERE event_id=? AND user_id=?").bind(e,member.id).run();
+  checks.leaderOwnEvent=leaderOwnEvent;
+  checks.leaderOtherEventDenied=leaderOtherEvent;
   const ok=Object.values(checks).every(Boolean);
   return Response.json({ok,checks},{status:ok?200:500});
  }
