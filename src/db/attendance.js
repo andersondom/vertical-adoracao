@@ -1,5 +1,3 @@
-import { logAudit } from './audit.js';
-
 const allowed = new Set(['present','absent_justified','absent_unjustified']);
 const fail = (message,status=400) => { throw Object.assign(new Error(message),{status}); };
 
@@ -27,9 +25,10 @@ export async function saveAttendance(env, actor, {eventId,userId,status,justific
       .bind(eventId,userId,status,note||null,actor.id),
     env.DB.prepare(`INSERT INTO event_attendance_history(event_id,user_id,previous_status,new_status,
       previous_justification,new_justification,reason,actor_user_id)
-      VALUES(?,?,?,?,?,?,?,?)`).bind(eventId,userId,previous?.status||null,status,previous?.justification||null,note||null,why,actor.id)
+      VALUES(?,?,?,?,?,?,?,?)`).bind(eventId,userId,previous?.status||null,status,previous?.justification||null,note||null,why,actor.id),
+    env.DB.prepare('INSERT INTO audit_log(actor_user_id,action,details) VALUES(?,?,?)')
+      .bind(actor.id,correction?'ATTENDANCE_CORRECTED':'ATTENDANCE_RECORDED',JSON.stringify({eventId,userId,status}))
   ]);
-  await logAudit(env,actor.id,correction?'ATTENDANCE_CORRECTED':'ATTENDANCE_RECORDED',JSON.stringify({eventId,userId,status}));
   return {ok:true,correction};
 }
 
@@ -43,10 +42,13 @@ export async function closeAttendance(env,actor,eventId) {
   if(Number(missing?.total||0)>0) fail('Existem integrantes escalados sem presença ou ausência registrada.',409);
   const current=await env.DB.prepare('SELECT status FROM event_attendance_closures WHERE event_id=?').bind(eventId).first();
   if(current?.status==='closed') fail('Presenças já encerradas.',409);
-  await env.DB.prepare(`INSERT INTO event_attendance_closures(event_id,status,closed_by,closed_at,updated_at)
-    VALUES(?,'closed',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-    ON CONFLICT(event_id) DO UPDATE SET status='closed',closed_by=excluded.closed_by,
-    closed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(eventId,actor.id).run();
-  await logAudit(env,actor.id,'ATTENDANCE_CLOSED',JSON.stringify({eventId}));
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO event_attendance_closures(event_id,status,closed_by,closed_at,updated_at)
+      VALUES(?,'closed',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+      ON CONFLICT(event_id) DO UPDATE SET status='closed',closed_by=excluded.closed_by,
+      closed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(eventId,actor.id),
+    env.DB.prepare('INSERT INTO audit_log(actor_user_id,action,details) VALUES(?,?,?)')
+      .bind(actor.id,'ATTENDANCE_CLOSED',JSON.stringify({eventId}))
+  ]);
   return {ok:true};
 }
