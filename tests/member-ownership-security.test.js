@@ -81,3 +81,34 @@ for (const confirm of [true, false]) {
     assert.equal(DB.calls.some(c => /UPDATE team_assignments/.test(c.sql)), false);
   });
 }
+
+
+test("member declines own reserved assignment and audit records the transition", async () => {
+  const DB = fakeDb({ assignment: { status: "reserved", is_leader: 0 } });
+  const response = await post("/api/team-confirmation", {
+    eventId: 3, roleId: 2, userId: 99, confirm: false
+  }, DB);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  const update = DB.calls.find(c => c.sql.includes("UPDATE team_assignments"));
+  assert.deepEqual(update.args, ["declined", 3, 7, 2]);
+  assert.ok(DB.calls.some(c => c.sql.includes("INSERT INTO audit_log")));
+});
+
+test("member cannot change assignment after declining it", async () => {
+  const DB = fakeDb({ assignment: { status: "declined", is_leader: 0 } });
+  const response = await post("/api/team-confirmation", {
+    eventId: 3, roleId: 2, confirm: false
+  }, DB);
+  assert.equal(response.status, 409);
+  assert.equal(DB.calls.some(c => c.sql.includes("UPDATE team_assignments")), false);
+});
+
+test("member cannot confirm a proposed assignment before admin approval", async () => {
+  const DB = fakeDb({ assignment: { status: "proposed", is_leader: 0 } });
+  const response = await post("/api/team-confirmation", {
+    eventId: 3, roleId: 2, confirm: true
+  }, DB);
+  assert.equal(response.status, 409);
+  assert.equal(DB.calls.some(c => c.sql.includes("UPDATE team_assignments")), false);
+});
