@@ -57,3 +57,75 @@ for (const [path, method] of adminRoutes) {
     assert.equal(response.status, 401);
   });
 }
+
+
+function adminEnv() {
+  const mutations = [];
+  const DB = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return {
+            async first() {
+              if (sql.includes("FROM sessions s")) return {
+                session_id: "admin-test-session", expires_at: "2099-01-01T00:00:00.000Z",
+                id: 10, name: "Fictitious Admin", email: "admin@example.invalid",
+                role: "admin", active: 1
+              };
+              throw new Error("Unexpected SELECT: " + sql);
+            },
+            async run() {
+              mutations.push({ sql, args });
+              if (/UPDATE schedule_settings|INSERT INTO events|INSERT INTO audit_log/.test(sql)) return { success: true };
+              throw new Error("Unexpected mutation: " + sql);
+            }
+          };
+        }
+      };
+    }
+  };
+  return { DB, mutations };
+}
+
+async function adminPost(path, body, DB) {
+  return worker.fetch(new Request("https://vertical.example" + path, {
+    method: "POST",
+    headers: {
+      Cookie: "louvor_session=admin-test-session",
+      Origin: "https://vertical.example",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  }), { DB });
+}
+
+for (const availabilityOpen of [true, false]) {
+  test(`admin can ${availabilityOpen ? "open" : "close"} availability window`, async () => {
+    const { DB, mutations } = adminEnv();
+    const response = await adminPost("/api/admin/settings", { availabilityOpen }, DB);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+    const update = mutations.find(x => x.sql.includes("UPDATE schedule_settings"));
+    assert.deepEqual(update.args, [availabilityOpen ? 1 : 0]);
+    assert.ok(mutations.some(x => x.sql.includes("INSERT INTO audit_log")));
+  });
+}
+
+test("admin can create a valid event", async () => {
+  const { DB, mutations } = adminEnv();
+  const response = await adminPost("/api/admin/event", {
+    eventDate: "2027-01-10", dayCode: "D", title: "Evento fictício", icon: "🎶"
+  }, DB);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  const insert = mutations.find(x => x.sql.includes("INSERT INTO events"));
+  assert.deepEqual(insert.args, ["2027-01-10", "D", "Evento fictício", "🎶"]);
+  assert.ok(mutations.some(x => x.sql.includes("INSERT INTO audit_log")));
+});
+
+test("admin invalid event is rejected without mutation", async () => {
+  const { DB, mutations } = adminEnv();
+  const response = await adminPost("/api/admin/event", { eventDate: "invalid", dayCode: "D" }, DB);
+  assert.equal(response.status, 400);
+  assert.equal(mutations.length, 0);
+});
