@@ -7,11 +7,11 @@ Esta documentação registra a validação das alterações de segurança dos PR
 | PR | Escopo | CI aprovado | Branch |
 |---|---|---|---|
 | #17 | POST /logout, proteção de origem e regressão Chromium autenticada | #221 — https://github.com/andersondom/vertical-adoracao/actions/runs/40754032947 | fix/logout-http-security |
-| #18 | 11 rotas administrativas: membro 403 e anônimo 401 | #215 — https://github.com/andersondom/vertical-adoracao/actions/runs/40744627730 | test/admin-route-authorization |
-| #19 | Disponibilidade e confirmação vinculadas ao integrante autenticado | #217 — https://github.com/andersondom/vertical-adoracao/actions/runs/40746231726 | test/member-ownership-security |
-| #20 | Homologação integrada dos três PRs, incluindo Chromium autenticado | #220 — https://github.com/andersondom/vertical-adoracao/actions/runs/40752476483 | test/integrated-security-validation |
+| #18 | 11 rotas administrativas: membro 403 e anônimo 401; 4 cenários positivos/validação (26 no total) | #223 — https://github.com/andersondom/vertical-adoracao/actions/runs/40754527021 | test/admin-route-authorization |
+| #19 | Disponibilidade e confirmação vinculadas ao integrante autenticado; transições de status e auditoria (7 cenários) | #224 — https://github.com/andersondom/vertical-adoracao/actions/runs/40754717314 | test/member-ownership-security |
+| #20 | Homologação integrada atualizada dos três PRs, incluindo Chromium autenticado | #225 — https://github.com/andersondom/vertical-adoracao/actions/runs/40754930001 | test/integrated-security-validation |
 
-Checks do CI integrado: D1 local e seed fictícia; `npm test`; validação de configuração; builds `wrangler deploy --dry-run` para produção/staging; Chromium contra Worker local. O teste autenticado verifica sessão antes do logout, GET bloqueado sem perda de sessão, POST com revogação e rejeição do token antigo.
+Atualização da homologação integrada em 28/10/2026: execução #225 aprovada após sincronização dos testes ampliados de #18 e #19.\n\nChecks do CI integrado: D1 local e seed fictícia; `npm test`; validação de configuração; builds `wrangler deploy --dry-run` para produção/staging; Chromium contra Worker local. O teste autenticado verifica sessão antes do logout, GET bloqueado sem perda de sessão, POST com revogação e rejeição do token antigo.
 
 ## Revisão de compatibilidade
 Comparações com `main` em 28/10/2026: branches #17 (7 commits à frente, 0 atrás), #18 (1 à frente, 0 atrás), #19 (3 à frente, 0 atrás), #20 (9 à frente, 0 atrás). Os arquivos alterados pelos PRs #17, #18 e #19 são disjuntos, reduzindo risco de conflitos textuais. Não substitui revisão formal ou homologação funcional de produção.
