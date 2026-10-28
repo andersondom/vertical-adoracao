@@ -4,12 +4,15 @@ import { saveAttendance, closeAttendance } from '../src/db/attendance.js';
 
 const actor={id:1,role:'admin'};
 const member={id:2,role:'member'};
-const env={DB:{prepare(){throw Error('Não deveria consultar o banco.');}}};
+const env={DB:{prepare(sql){
+ if (!sql.includes('is_leader=1')) throw Error('Consulta inesperada.');
+ return {bind(){return {async first(){return null;}}}};
+}}};
 
-test('integrante não pode registrar presença de terceiros',async()=>{
+test('integrante sem liderança não pode registrar presença de terceiros',async()=>{
  await assert.rejects(saveAttendance(env,member,{eventId:1,userId:2,status:'present',reason:'Registro'}),e=>e.status===403);
 });
-test('integrante não pode encerrar presenças',async()=>{
+test('integrante sem liderança não pode encerrar presenças',async()=>{
  await assert.rejects(closeAttendance(env,member,1),e=>e.status===403);
 });
 test('status inválido é rejeitado antes do acesso ao banco',async()=>{
