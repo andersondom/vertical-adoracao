@@ -11,22 +11,32 @@ export default {
   for(const [token,id] of [['http-member',member.id],['http-admin',admin.id]]){
    await env.DB.prepare('INSERT OR REPLACE INTO sessions(id,user_id,expires_at) VALUES(?,?,?)').bind(token,id,expiry).run();
   }
-  const check=async(path,token,method='GET',payload)=>{
-   const headers={};
+  const check=async(path,token,method='GET',payload,extraHeaders={})=>{
+   const headers={...extraHeaders};
    if(token)headers.Cookie='louvor_session='+token;
    if(payload)headers['Content-Type']='application/json';
    const res=await app.fetch(new Request('http://localhost'+path,{method,headers,body:payload?JSON.stringify(payload):undefined}),env);
    return res.status;
   };
   const e=event.id;
-  const checks={
+  await env.DB.prepare('INSERT OR REPLACE INTO sessions(id,user_id,expires_at) VALUES(?,?,?)').bind('http-expired',member.id,new Date(Date.now()-60000).toISOString()).run();
+   const disabled=await env.DB.prepare("SELECT id FROM users WHERE email='id03-integrante@vertical.invalid'").first();
+   if(!disabled)return Response.json({ok:false,error:'Fixture ID03 ausente'},{status:409});
+   await env.DB.prepare('UPDATE users SET active=0 WHERE id=?').bind(disabled.id).run();
+   await env.DB.prepare('INSERT OR REPLACE INTO sessions(id,user_id,expires_at) VALUES(?,?,?)').bind('http-disabled',disabled.id,expiry).run();
+   const checks={
    unauthenticated:(await check('/api/admin/attendance/event?eventId='+e))===401,
    readDenied:(await check('/api/admin/attendance/event?eventId='+e,'http-member'))===403,
    writeDenied:(await check('/api/admin/attendance','http-member','POST',{eventId:e,userId:member.id,status:'present',reason:'teste'}))===403,
    closeDenied:(await check('/api/admin/attendance/close','http-member','POST',{eventId:e}))===403,
    reportIsolation:(await check('/api/reports/participation?start=2099-01-01&end=2099-01-31&memberId='+admin.id,'http-member'))===403,
    ownReport:(await check('/api/reports/participation?start=2099-01-01&end=2099-01-31&memberId='+member.id,'http-member'))===200,
-   adminRead:(await check('/api/admin/attendance/event?eventId='+e,'http-admin'))===200
+   adminRead:(await check('/api/admin/attendance/event?eventId='+e,'http-admin'))===200,
+   expiredSession:(await check('/api/me','http-expired'))===401,
+   disabledAccount:(await check('/api/me','http-disabled'))===401,
+   crossOrigin:(await check('/api/admin/attendance','http-admin','POST',{eventId:e,userId:member.id,status:'present',reason:'teste'},{Origin:'https://example.invalid'}))===403,
+   missingOrigin:(await check('/api/admin/attendance','http-admin','POST',{eventId:e,userId:member.id,status:'present',reason:'teste'}))===403,
+   sameOrigin:(await check('/api/admin/attendance','http-admin','POST',{eventId:e,userId:member.id,status:'present',reason:'teste'},{Origin:'http://localhost'}))===200
   };
   const ok=Object.values(checks).every(Boolean);
   return Response.json({ok,checks},{status:ok?200:500});
