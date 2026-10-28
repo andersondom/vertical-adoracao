@@ -1,8 +1,9 @@
+import { requireEventAttendanceManager } from '../auth/event-attendance-policy.js';
 const allowed = new Set(['present','absent_justified','absent_unjustified']);
 const fail = (message,status=400) => { throw Object.assign(new Error(message),{status}); };
 
 export async function saveAttendance(env, actor, {eventId,userId,status,justification,reason}) {
-  if (actor.role !== 'admin') fail('Acesso negado.',403);
+  await requireEventAttendanceManager(env, actor, eventId);
   if (!allowed.has(status)) fail('Situação de presença inválida.');
   const why=String(reason||'').trim();
   const note=String(justification||'').trim();
@@ -33,7 +34,7 @@ export async function saveAttendance(env, actor, {eventId,userId,status,justific
 }
 
 export async function closeAttendance(env,actor,eventId) {
-  if(actor.role!=='admin') fail('Acesso negado.',403);
+  await requireEventAttendanceManager(env, actor, eventId);
   const event=await env.DB.prepare('SELECT id FROM events WHERE id=?').bind(eventId).first();
   if(!event) fail('Evento não encontrado.',404);
   const active=await env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS total FROM team_assignments WHERE event_id=? AND status IN ('confirmed','reserved')").bind(eventId).first();
