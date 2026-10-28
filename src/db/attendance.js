@@ -9,6 +9,7 @@ export async function saveAttendance(env, actor, {eventId,userId,status,justific
   const why=String(reason||'').trim();
   const note=String(justification||'').trim();
   if (!why) fail('Informe a justificativa da alteração.');
+  if (status === 'absent_justified' && !note) fail('Informe o motivo da ausência justificada.');
   if (why.length>1000 || note.length>2000) fail('Texto excede o limite permitido.');
   const event=await env.DB.prepare('SELECT id FROM events WHERE id=?').bind(eventId).first();
   if (!event) fail('Evento não encontrado.',404);
