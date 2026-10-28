@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
 
-function fixture(status = "reserved") {
+function fixture(status = "reserved", attendanceClosed = false) {
   const assignment = { status };
   const audit = [];
   const db = {
@@ -14,6 +14,12 @@ function fixture(status = "reserved") {
             return { session_id: token, expires_at: "2099-01-01T00:00:00.000Z",
               id: 1, name: "Admin", email: "admin@exemplo.invalid", role: "admin", active: 1 };
           } };
+        }
+      };
+      if (sql.includes("FROM event_attendance_closures")) return {
+        bind(eventId) {
+          assert.equal(eventId,4);
+          return { async first() { return attendanceClosed ? {status:"closed"} : null; } };
         }
       };
       if (sql.includes("SELECT status FROM team_assignments")) return {
@@ -75,5 +81,13 @@ test("cancelamento rejeita identificadores inválidos",async()=>{
   const f=fixture();
   const response=await cancel(f,{eventId:4,userId:-8,roleId:2});
   assert.equal(response.status,400);
+  assert.equal(f.audit.length,0);
+});
+
+test("cancelamento após fechamento de presenças é bloqueado",async()=>{
+  const f=fixture("confirmed",true);
+  const response=await cancel(f,{eventId:4,userId:8,roleId:2});
+  assert.equal(response.status,409);
+  assert.equal(f.assignment.status,"confirmed");
   assert.equal(f.audit.length,0);
 });
