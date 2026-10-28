@@ -259,6 +259,11 @@ export async function handleApi(request, env, url) {
     const eventId = Number(body.eventId);
     const userId = Number(body.userId);
     const roleId = Number(body.roleId);
+    const closedAttendance = await env.DB.prepare("SELECT status FROM event_attendance_closures WHERE event_id=?").bind(eventId).first();
+    if (closedAttendance?.status === "closed") {
+      return json({ error: "Presenças encerradas: não é possível alterar a escala deste evento." }, 409);
+    }
+
     const isLeader = body.isLeader === true;
     const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
     const member = await env.DB.prepare("SELECT id,active FROM users WHERE id=?").bind(userId).first();
@@ -327,6 +332,11 @@ export async function handleApi(request, env, url) {
     const eventId = Number(body.eventId);
     const userId = Number(body.userId);
     const roleId = Number(body.roleId);
+    const closedAttendance = await env.DB.prepare("SELECT status FROM event_attendance_closures WHERE event_id=?").bind(eventId).first();
+    if (closedAttendance?.status === "closed") {
+      return json({ error: "Presenças encerradas: não é possível alterar a escala deste evento." }, 409);
+    }
+
     const current = await env.DB.prepare(
       "SELECT status FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
     ).bind(eventId,userId,roleId).first();
@@ -346,6 +356,11 @@ export async function handleApi(request, env, url) {
         typeof body.confirm !== "boolean") return json({ error: "Confirmação inválida." }, 400);
     const eventId = Number(body.eventId);
     const roleId = Number(body.roleId);
+    const closedAttendance = await env.DB.prepare("SELECT status FROM event_attendance_closures WHERE event_id=?").bind(eventId).first();
+    if (closedAttendance?.status === "closed") {
+      return json({ error: "Presenças encerradas: não é possível alterar a escala deste evento." }, 409);
+    }
+
     const assignment = await env.DB.prepare(
       "SELECT status,is_leader FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
     ).bind(eventId,auth.user.id,roleId).first();
