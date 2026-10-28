@@ -35,3 +35,28 @@ Nenhum deploy, merge, migração remota ou modificação de produção foi reali
 2. Testar casos de validação de entrada e erros de autorização em múltiplos eventos.
 3. Consolidar checklist de homologação visual em navegador.
 4. Submeter eventual publicação à aprovação explícita.
+
+
+## Atualização — autorização entre eventos
+
+Commit validado: `fd74b6dd750c5e7854718b55332713317badf2c2`.
+
+- GitHub Actions, execução [40733552387](https://github.com/andersondom/vertical-adoracao/actions/runs/40733552387), job 122975953598: conclusão `success`.
+- Log `http-security`: `ok:true` com **14 verificações** HTTP aprovadas.
+- `leaderOwnEvent:true`: líder autorizado lê as presenças do próprio evento.
+- `leaderOtherEventDenied:true`: a mesma liderança não acessa as presenças de outro evento.
+- Total: **5 cenários D1 + 14 verificações HTTP = 19 aprovados**.
+
+## Checklist de homologação funcional em navegador (pendente)
+
+- [ ] Abrir a interface de presenças como administrador e conferir lista de integrantes e status.
+- [ ] Registrar presença e ausência justificada, verificando mensagens e atualização visual.
+- [ ] Tentar encerrar evento com integrante sem registro e conferir bloqueio amigável.
+- [ ] Encerrar evento completo e conferir indicadores e histórico.
+- [ ] Corrigir registro após encerramento com justificativa e conferir auditoria.
+- [ ] Entrar como líder designado, verificar acesso apenas ao evento autorizado.
+- [ ] Entrar como integrante sem liderança, verificar ausência de controles administrativos.
+- [ ] Conferir interface em telas pequenas e navegação por teclado.
+- [ ] Conferir relatórios individuais e filtros de período.
+
+Este checklist **não foi executado**. A aprovação automatizada não substitui a validação visual, a revisão de acessibilidade nem a autorização explícita para publicação.
