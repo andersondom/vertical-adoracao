@@ -104,7 +104,7 @@ label{font-size:13px;color:#334155;display:block}.g2{grid-template-columns:repea
 <script>
 let ME=null, DATA=null;
 function currentMonth(){const p=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value;}
-async function changeScheduleMonth(month){if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))return;try{DATA=await api("/api/data?month="+encodeURIComponent(month));id("month").textContent=DATA.settings.month_label;id("scheduleMonth").value=DATA.selectedMonth;renderSchedule();if(ME.role==="admin"){renderUsers();renderSettings();}}catch(e){alert(e.message);}}
+async function changeScheduleMonth(month){if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))return;try{DATA=await api("/api/data?month="+encodeURIComponent(month));id("month").textContent=DATA.settings.month_label;id("scheduleMonth").value=DATA.selectedMonth;renderSchedule();if(ME.role==="admin"){renderUsers();renderSettings();renderAttendance();}}catch(e){alert(e.message);}}
 
 async function api(path, options={}){
   const r=await fetch(path,{headers:{'content-type':'application/json',...(options.headers||{})},...options});
@@ -349,7 +349,7 @@ async function reloadData(){
   id('month').textContent=DATA.settings.month_label;
   id('scheduleMonth').value=DATA.selectedMonth;
   renderSchedule();
-  if(ME.role==='admin'){renderUsers();renderSettings();}
+  if(ME.role==='admin'){renderUsers();renderSettings();renderAttendance();}
 }
 function showView(v){for(const x of ['schedule','users','settings','attendance']) id(x+'View').classList.toggle('hidden',x!==v);document.querySelectorAll('#adminTabs [data-view]').forEach(b=>{const selected=b.dataset.view===v;b.classList.toggle('active',selected);b.setAttribute('aria-current',selected?'page':'false')})}
 function id(x){return document.getElementById(x)} function val(x){return id(x).value}
