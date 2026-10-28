@@ -84,6 +84,25 @@ export async function handleApi(request, env, url) {
     return json(await getData(env, auth.user, month));
   }
 
+  if (url.pathname === "/api/admin/attendance/event" && request.method === "GET") {
+    requireAdmin(auth);
+    const eventId = url.searchParams.get("eventId");
+    if (!isPositiveInteger(eventId)) return json({ error: "Evento inválido." }, 400);
+    const event = await env.DB.prepare("SELECT id,event_date,title FROM events WHERE id=?").bind(Number(eventId)).first();
+    if (!event) return json({ error: "Evento não encontrado." }, 404);
+    const closure = await env.DB.prepare("SELECT status,closed_at FROM event_attendance_closures WHERE event_id=?").bind(Number(eventId)).first();
+    const members = await env.DB.prepare(`SELECT ta.user_id,u.name,
+      GROUP_CONCAT(DISTINCT mr.label) AS roles,
+      a.status AS attendance_status,a.justification
+      FROM team_assignments ta
+      JOIN users u ON u.id=ta.user_id
+      LEFT JOIN ministry_roles mr ON mr.id=ta.role_id
+      LEFT JOIN event_attendance a ON a.event_id=ta.event_id AND a.user_id=ta.user_id
+      WHERE ta.event_id=? AND ta.status IN ('reserved','confirmed')
+      GROUP BY ta.user_id,u.name,a.status,a.justification ORDER BY u.name`).bind(Number(eventId)).all();
+    return json({event,closure:closure||{status:"pending"},members:members.results||[]});
+  }
+
   if (url.pathname === "/api/admin/attendance" && request.method === "POST") {
     requireAdmin(auth);
     const body = await request.json();
