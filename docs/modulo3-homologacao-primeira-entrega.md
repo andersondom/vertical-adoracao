@@ -24,11 +24,13 @@
 - [ ] **H10 — Pendências:** eventos sem fechamento não reduzem a taxa de presença.
 - [ ] **H11 — Privacidade:** integrante não consegue consultar indicadores de outro integrante.
 - [ ] **H12 — Responsividade:** tela de presença e indicadores é utilizável em celular e desktop.
+- [ ] **H13 — Escala bloqueada:** depois do fechamento de presenças, administrador não consegue adicionar ou retirar integrantes da equipe desse evento.
+- [ ] **H14 — Confirmação bloqueada:** integrante não consegue confirmar ou recusar escalação de evento cujas presenças já foram encerradas.
 
 ## Evidências e resultado
 Para cada falha, registrar **código Hxx**, comportamento observado, mensagem de erro e captura de tela quando disponível.
 
-**Critério de aprovação:** 12/12 itens aprovados, sem exposição indevida de dados e sem regressão das funcionalidades existentes.
+**Critério de aprovação:** 14/14 itens aprovados, sem exposição indevida de dados e sem regressão das funcionalidades existentes.
 
 ## Limites desta entrega
 Ainda não contempla autorização delegada a líderes, alertas, exportações, dashboards coletivos, revisão/recursos, relatórios programados e demais funcionalidades previstas para etapas seguintes.
