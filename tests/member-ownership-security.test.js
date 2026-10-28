@@ -22,7 +22,10 @@ function fakeDb({ availabilityOpen = 1, assignment = null } = {}) {
               if (sql.includes("SELECT id,active FROM users")) return { id: args[0], active: 1 };
               throw new Error("Unexpected query: " + sql);
             },
-            async run() { throw new Error("Unexpected mutation: " + sql); }
+            async run() {
+              if (/INSERT INTO availability|INSERT INTO audit_log|UPDATE team_assignments/.test(sql)) return { success: true };
+              throw new Error("Unexpected mutation: " + sql);
+            }
           };
         },
         async first() {
@@ -55,11 +58,13 @@ test("member cannot change another user's availability when window is closed", a
 
 test("member-supplied userId is ignored and availability targets authenticated member", async () => {
   const DB = fakeDb();
-  // Stop before mutation to inspect the identity used in the target lookup.
+  // A successful update must target the authenticated identity, never the supplied userId.
   const response = await post("/api/availability", {
     eventId: 3, userId: 99, available: true
   }, DB);
-  assert.equal(response.status, 500);
+  assert.equal(response.status, 200);
+  const mutation = DB.calls.find(c => c.sql.includes("INSERT INTO availability"));
+  assert.deepEqual(mutation.args.slice(0, 2), [3, 7]);
   const lookup = DB.calls.find(c => c.sql.includes("SELECT id,active FROM users"));
   assert.deepEqual(lookup.args, [7]);
 });
