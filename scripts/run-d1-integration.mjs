@@ -44,7 +44,7 @@ try{
  console.log('Banco temporário:',root);
  run(['d1','migrations','apply','louvor-db','--local','--persist-to',root]);
  run(['d1','execute','louvor-db','--local','--persist-to',root,'--file','scripts/id01-fixture-local.sql']);
- for(const [id,port] of [['id01',8791],['id02',8792],['id03',8793],['id04',8794],['id05',8795]])await phase(id,port);
- console.log('APROVADO: ID01 a ID05, D1 temporário.');
+ for(const [id,port] of [['id01',8791],['id02',8792],['id03',8793],['id04',8794],['id05',8795],['http-security',8796]])await phase(id,port);
+ console.log('APROVADO: ID01 a ID05 e HTTP security, D1 temporário.');
 }catch(e){console.error('FALHA:',e.message);process.exitCode=1;
 }finally{if(server)stopServer(server);await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:1000});}
