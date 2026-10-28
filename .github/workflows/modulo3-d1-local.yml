@@ -1,0 +1,59 @@
+name: Integracao D1 local - Modulo 3
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/modulo3-presencas-indicadores
+    paths:
+      - 'src/**'
+      - 'migrations/**'
+      - 'scripts/id0*'
+      - 'scripts/http-security*'
+      - 'scripts/run-d1-integration.mjs'
+      - 'tests/modulo3-ui-contract.test.js'
+      - 'scripts/run-browser-smoke.mjs'
+      - '.github/workflows/modulo3-d1-local.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'migrations/**'
+      - 'scripts/id0*'
+      - 'scripts/http-security*'
+      - 'scripts/run-d1-integration.mjs'
+      - 'tests/modulo3-ui-contract.test.js'
+      - 'scripts/run-browser-smoke.mjs'
+      - '.github/workflows/modulo3-d1-local.yml'
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Testes unitarios
+        run: npm test
+      - name: Integracao real D1 isolado ID01-ID05 e HTTP
+        run: node scripts/run-d1-integration.mjs
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Instalar Playwright sem alterar lockfile
+        run: npm install --no-save --package-lock=false playwright
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Navegador real com D1 temporario
+        run: node scripts/run-browser-smoke.mjs

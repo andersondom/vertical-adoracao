@@ -2,9 +2,12 @@ import { normalizeEmail, isEmail, isPositiveInteger, isValidDate } from "../util
 import { hashPassword, verifyPassword } from "../auth/crypto.js";
 import { getAuth, createSessionResponse, logout } from "../auth/session.js";
 import { requireAdmin } from "../auth/authorization.js";
+import { requireEventAttendanceManager } from "../auth/event-attendance-policy.js";
 import { json } from "../utils/http.js";
 import { logAudit } from "../db/audit.js";
 import { getData } from "../db/schedule.js";
+import { getParticipationReport } from "../db/reports.js";
+import { saveAttendance, closeAttendance } from "../db/attendance.js";
 import { suggestTeam } from "../domain/team-suggestions.js";
 import { loginIdentityHash, isLoginBlocked, recordLoginFailure, clearLoginFailures } from "../auth/login-rate-limit.js";
 
@@ -80,6 +83,53 @@ export async function handleApi(request, env, url) {
     const month = url.searchParams.get("month");
     if (month && (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month) || Number(month.slice(0,4)) < 2000 || Number(month.slice(0,4)) > 2100)) return json({ error: "Mês inválido." }, 400);
     return json(await getData(env, auth.user, month));
+  }
+
+  if (url.pathname === "/api/admin/attendance/event" && request.method === "GET") {
+    const eventId = url.searchParams.get("eventId");
+    if (!isPositiveInteger(eventId)) return json({ error: "Evento inválido." }, 400);
+    await requireEventAttendanceManager(env, auth.user, Number(eventId));
+    const event = await env.DB.prepare("SELECT id,event_date,title FROM events WHERE id=?").bind(Number(eventId)).first();
+    if (!event) return json({ error: "Evento não encontrado." }, 404);
+    const closure = await env.DB.prepare("SELECT status,closed_at FROM event_attendance_closures WHERE event_id=?").bind(Number(eventId)).first();
+    const members = await env.DB.prepare(`SELECT ta.user_id,u.name,
+      GROUP_CONCAT(DISTINCT mr.label) AS roles,
+      a.status AS attendance_status,a.justification
+      FROM team_assignments ta
+      JOIN users u ON u.id=ta.user_id
+      LEFT JOIN ministry_roles mr ON mr.id=ta.role_id
+      LEFT JOIN event_attendance a ON a.event_id=ta.event_id AND a.user_id=ta.user_id
+      WHERE ta.event_id=? AND ta.status IN ('reserved','confirmed')
+      GROUP BY ta.user_id,u.name,a.status,a.justification ORDER BY u.name`).bind(Number(eventId)).all();
+    return json({event,closure:closure||{status:"pending"},members:members.results||[]});
+  }
+
+  if (url.pathname === "/api/admin/attendance" && request.method === "POST") {
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.userId)) {
+      return json({ error: "Evento ou integrante inválido." }, 400);
+    }
+    return json(await saveAttendance(env, auth.user, {
+      eventId:Number(body.eventId), userId:Number(body.userId),
+      status:body.status, justification:body.justification, reason:body.reason
+    }));
+  }
+
+  if (url.pathname === "/api/admin/attendance/close" && request.method === "POST") {
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId)) return json({ error: "Evento inválido." }, 400);
+    return json(await closeAttendance(env, auth.user, Number(body.eventId)));
+  }
+
+  if (url.pathname === "/api/reports/participation" && request.method === "GET") {
+    const start = url.searchParams.get("start");
+    const end = url.searchParams.get("end");
+    const memberId = url.searchParams.get("memberId");
+    if (!isValidDate(start) || !isValidDate(end) || start > end ||
+        (memberId !== null && !isPositiveInteger(memberId))) {
+      return json({ error: "Período ou integrante inválido." }, 400);
+    }
+    return json(await getParticipationReport(env, auth.user, { start, end, memberId }));
   }
 
   if (url.pathname === "/api/availability" && request.method === "POST") {
@@ -208,6 +258,11 @@ export async function handleApi(request, env, url) {
     const eventId = Number(body.eventId);
     const userId = Number(body.userId);
     const roleId = Number(body.roleId);
+    const closedAttendance = await env.DB.prepare("SELECT status FROM event_attendance_closures WHERE event_id=?").bind(eventId).first();
+    if (closedAttendance?.status === "closed") {
+      return json({ error: "Presenças encerradas: não é possível alterar a escala deste evento." }, 409);
+    }
+
     const isLeader = body.isLeader === true;
     const event = await env.DB.prepare("SELECT id FROM events WHERE id=?").bind(eventId).first();
     const member = await env.DB.prepare("SELECT id,active FROM users WHERE id=?").bind(userId).first();
@@ -276,6 +331,11 @@ export async function handleApi(request, env, url) {
     const eventId = Number(body.eventId);
     const userId = Number(body.userId);
     const roleId = Number(body.roleId);
+    const closedAttendance = await env.DB.prepare("SELECT status FROM event_attendance_closures WHERE event_id=?").bind(eventId).first();
+    if (closedAttendance?.status === "closed") {
+      return json({ error: "Presenças encerradas: não é possível alterar a escala deste evento." }, 409);
+    }
+
     const current = await env.DB.prepare(
       "SELECT status FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
     ).bind(eventId,userId,roleId).first();
@@ -295,6 +355,11 @@ export async function handleApi(request, env, url) {
         typeof body.confirm !== "boolean") return json({ error: "Confirmação inválida." }, 400);
     const eventId = Number(body.eventId);
     const roleId = Number(body.roleId);
+    const closedAttendance = await env.DB.prepare("SELECT status FROM event_attendance_closures WHERE event_id=?").bind(eventId).first();
+    if (closedAttendance?.status === "closed") {
+      return json({ error: "Presenças encerradas: não é possível alterar a escala deste evento." }, 409);
+    }
+
     const assignment = await env.DB.prepare(
       "SELECT status,is_leader FROM team_assignments WHERE event_id=? AND user_id=? AND role_id=?"
     ).bind(eventId,auth.user.id,roleId).first();

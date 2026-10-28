@@ -90,18 +90,21 @@ label{font-size:13px;color:#334155;display:block}.g2{grid-template-columns:repea
 <button data-view="schedule" aria-controls="scheduleView" onclick="showView('schedule')">📅 Escala</button>
 <button data-view="users" aria-controls="usersView" onclick="showView('users')">👥 Integrantes</button>
 <button data-view="settings" aria-controls="settingsView" onclick="showView('settings')">⚙️ Configurações</button>
+<button data-view="attendance" aria-controls="attendanceView" onclick="showView('attendance')">✔️ Presenças</button>
 </nav>
 <div class="card row"><label for="scheduleMonth">Consultar escalas por mês <input id="scheduleMonth" type="month" min="2000-01" max="2100-12" onchange="changeScheduleMonth(this.value)"></label><button class="alt" onclick="changeScheduleMonth(currentMonth())">Mês atual</button></div>
 <div id="scheduleView"></div>
 <div id="usersView" class="hidden"></div>
 <div id="settingsView" class="hidden"></div>
+<div id="attendanceView" class="hidden"></div>
+<div id="reportsView" class="card"><h2>📊 Minha participação</h2><div class="row"><label>De <input type="date" id="reportStart"></label><label>Até <input type="date" id="reportEnd"></label><button onclick="loadParticipation()">Consultar</button></div><div id="reportResult" class="muted">Selecione o período e consulte seus indicadores.</div></div>
 </section>
 </main>
 
 <script>
 let ME=null, DATA=null;
 function currentMonth(){const p=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value;}
-async function changeScheduleMonth(month){if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))return;try{DATA=await api("/api/data?month="+encodeURIComponent(month));id("month").textContent=DATA.settings.month_label;id("scheduleMonth").value=DATA.selectedMonth;renderSchedule();if(ME.role==="admin"){renderUsers();renderSettings();}}catch(e){alert(e.message);}}
+async function changeScheduleMonth(month){if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))return;try{DATA=await api("/api/data?month="+encodeURIComponent(month));id("month").textContent=DATA.settings.month_label;id("scheduleMonth").value=DATA.selectedMonth;renderSchedule();if(ME.role==="admin"){renderUsers();renderSettings();}updateAttendanceNavigation();renderAttendance();}catch(e){alert(e.message);}}
 
 async function api(path, options={}){
   const r=await fetch(path,{headers:{'content-type':'application/json',...(options.headers||{})},...options});
@@ -146,9 +149,14 @@ async function loadApp(){
   id('welcome').textContent='Olá, '+ME.name+'.';
   id('roleTag').textContent=ME.role==='admin'?'Administrador':'Integrante';
   id('topUser').textContent=ME.name;
-  if(ME.role==='admin') show('adminTabs');
+  updateAttendanceNavigation();
   renderSchedule();
-  if(ME.role==='admin'){renderUsers();renderSettings();showView('schedule');}
+  const year=DATA.selectedMonth.slice(0,4), month=DATA.selectedMonth.slice(5,7);
+  id('reportStart').value=year+'-'+month+'-01';
+  id('reportEnd').value=year+'-'+month+'-'+String(new Date(Number(year),Number(month),0).getDate()).padStart(2,'0');
+  if(ME.role==='admin'){renderUsers();renderSettings();}
+  renderAttendance();
+  if(canAccessAttendance())showView('schedule');
 }
 
 function renderSchedule(){
@@ -344,11 +352,74 @@ async function reloadData(){
   id('scheduleMonth').value=DATA.selectedMonth;
   renderSchedule();
   if(ME.role==='admin'){renderUsers();renderSettings();}
+  updateAttendanceNavigation();renderAttendance();
 }
-function showView(v){for(const x of ['schedule','users','settings']) id(x+'View').classList.toggle('hidden',x!==v);document.querySelectorAll('#adminTabs [data-view]').forEach(b=>{const selected=b.dataset.view===v;b.classList.toggle('active',selected);b.setAttribute('aria-current',selected?'page':'false')})}
+function showView(v){if(v==='attendance'&&!canAccessAttendance())return;if((v==='users'||v==='settings')&&ME.role!=='admin')return;for(const x of ['schedule','users','settings','attendance']) id(x+'View').classList.toggle('hidden',x!==v);document.querySelectorAll('#adminTabs [data-view]').forEach(b=>{const selected=b.dataset.view===v;b.classList.toggle('active',selected);b.setAttribute('aria-current',selected?'page':'false')})}
 function id(x){return document.getElementById(x)} function val(x){return id(x).value}
 function show(x){id(x).classList.remove('hidden')} function hide(x){id(x).classList.add('hidden')}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+
+async function loadParticipation(){
+ const target=id('reportResult');
+ target.textContent='Consultando...';
+ try{
+  const start=val('reportStart'),end=val('reportEnd');
+  const data=await api('/api/reports/participation?start='+encodeURIComponent(start)+'&end='+encodeURIComponent(end));
+  const x=data.indicators;
+  target.innerHTML='<div class="grid g2"><div class="avail">Compromissos: <strong>'+x.commitments+'</strong></div><div class="avail">Funções: <strong>'+x.functions+'</strong></div><div class="avail">Presenças: <strong>'+x.presences+'</strong></div><div class="avail">Pendentes: <strong>'+x.pending+'</strong></div><div class="avail">Ausências justificadas: <strong>'+x.justifiedAbsences+'</strong></div><div class="avail">Ausências não justificadas: <strong>'+x.unjustifiedAbsences+'</strong></div></div><p><strong>Taxa de presença:</strong> '+(x.attendanceRate===null?'Não calculável':x.attendanceRate.toLocaleString('pt-BR')+'%')+'</p>';
+ }catch(e){target.textContent=e.message}
+}
+function leaderEventIds(){
+ if(!DATA||!ME)return new Set();
+ return new Set((DATA.teamAssignments||[]).filter(a=>Number(a.user_id)===Number(ME.id)&&Number(a.is_leader)===1&&['confirmed','reserved'].includes(a.status)).map(a=>Number(a.event_id)));
+}
+function canAccessAttendance(){return ME?.role==='admin'||leaderEventIds().size>0;}
+function updateAttendanceNavigation(){
+ const tabs=id('adminTabs');
+ const permitted=canAccessAttendance();
+ tabs.classList.toggle('hidden',!permitted);
+ for(const name of ['users','settings']){
+  const button=tabs.querySelector('[data-view="'+name+'"]');
+  if(button)button.classList.toggle('hidden',ME.role!=='admin');
+ }
+ const att=tabs.querySelector('[data-view="attendance"]');
+ if(att)att.classList.toggle('hidden',!permitted);
+ if(!permitted&&!id('attendanceView').classList.contains('hidden'))showView('schedule');
+}
+function renderAttendance(){
+ if(!canAccessAttendance()){id('attendanceView').innerHTML='';return;}
+ const target=id('attendanceView');
+ target.innerHTML='<div class="card"><h2>Registro de presenças</h2><p class="muted">Selecione um evento. Somente integrantes com compromisso ativo serão exibidos.</p><label>Evento<select id="attendanceEvent"><option value="">Selecione</option>'+(DATA.events||[]).filter(e=>ME.role==='admin'||leaderEventIds().has(Number(e.id))).map(e=>'<option value="'+Number(e.id)+'">'+esc(e.event_date+' — '+(e.title||e.day_code))+'</option>').join('')+'</select></label><br><button onclick="loadAttendanceEvent()">Abrir evento</button><div id="attendanceDetail"></div></div>';
+}
+async function loadAttendanceEvent(){
+ const target=id('attendanceDetail'),eventId=Number(val('attendanceEvent'));
+ if(!eventId){target.textContent='Selecione um evento.';return}
+ target.textContent='Carregando...';
+ try{
+ const data=await api('/api/admin/attendance/event?eventId='+eventId);
+ const closed=data.closure.status==='closed';
+ let html='<p><strong>Fechamento:</strong> '+(closed?'Encerrado':'Pendente')+'</p>';
+ if(!data.members.length)html+='<p class="muted">Nenhum integrante escalado.</p>';
+ for(const member of data.members){
+  const uid=Number(member.user_id),status=member.attendance_status||'';
+  html+='<div class="avail"><strong>'+esc(member.name)+'</strong> <span class="muted">'+esc(member.roles||'')+'</span><label>Situação<select id="attStatus'+uid+'"><option value="">Selecione</option><option value="present" '+(status==='present'?'selected':'')+'>Presente</option><option value="absent_justified" '+(status==='absent_justified'?'selected':'')+'>Ausência justificada</option><option value="absent_unjustified" '+(status==='absent_unjustified'?'selected':'')+'>Ausência não justificada</option></select></label><label>Justificativa da ausência<input id="attNote'+uid+'" value="'+esc(member.justification||'')+'"></label><label>Motivo do registro ou correção<input id="attReason'+uid+'" placeholder="Obrigatório"></label><br><button class="smallbtn" onclick="saveAttendanceMember('+eventId+','+uid+')">Salvar</button></div>';
+ }
+ if(!closed)html+='<br><button onclick="closeAttendanceEvent('+eventId+')">Encerrar presenças do evento</button>';
+ target.innerHTML=html;
+ }catch(e){target.textContent=e.message}
+}
+async function saveAttendanceMember(eventId,userId){
+ try{
+  await api('/api/admin/attendance',{method:'POST',body:JSON.stringify({eventId,userId,status:val('attStatus'+userId),justification:val('attNote'+userId),reason:val('attReason'+userId)})});
+  await loadAttendanceEvent();
+ }catch(e){alert(e.message)}
+}
+async function closeAttendanceEvent(eventId){
+ if(!confirm('Confirmar fechamento das presenças deste evento?'))return;
+ try{await api('/api/admin/attendance/close',{method:'POST',body:JSON.stringify({eventId})});await loadAttendanceEvent()}
+ catch(e){alert(e.message)}
+}
+
 init();
 </script>
 </body></html>`;
