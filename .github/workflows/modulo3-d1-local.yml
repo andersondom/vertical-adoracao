@@ -9,6 +9,8 @@ on:
       - 'migrations/**'
       - 'scripts/id0*'
       - 'scripts/http-security*'
+      - 'scripts/run-d1-integration.mjs'
+      - 'tests/modulo3-ui-contract.test.js'
       - '.github/workflows/modulo3-d1-local.yml'
   pull_request:
     paths:
@@ -16,6 +18,8 @@ on:
       - 'migrations/**'
       - 'scripts/id0*'
       - 'scripts/http-security*'
+      - 'scripts/run-d1-integration.mjs'
+      - 'tests/modulo3-ui-contract.test.js'
       - '.github/workflows/modulo3-d1-local.yml'
 permissions:
   contents: read
