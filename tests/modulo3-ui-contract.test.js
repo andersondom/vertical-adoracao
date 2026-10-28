@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Script } from 'node:vm';
 import { appHtml } from '../src/web/app.js';
 
 const html = appHtml();
@@ -36,4 +37,12 @@ test('Módulo 3: indicadores e ajuste responsivo constam no HTML', () => {
   }
   assert.match(html,/@media\(max-width:700px\)/);
   assert.match(html,/name="viewport"/);
+});
+
+test('Módulo 3: scripts embutidos no HTML possuem JavaScript válido', () => {
+  const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+  assert.ok(scripts.length>0,'Nenhum script embutido encontrado');
+  for(const [,source] of scripts) {
+    assert.doesNotThrow(()=>new Script(source), 'JavaScript embutido inválido');
+  }
 });
