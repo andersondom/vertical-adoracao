@@ -2,6 +2,7 @@ import { normalizeEmail, isEmail, isPositiveInteger, isValidDate } from "../util
 import { hashPassword, verifyPassword } from "../auth/crypto.js";
 import { getAuth, createSessionResponse, logout } from "../auth/session.js";
 import { requireAdmin } from "../auth/authorization.js";
+import { requireEventAttendanceManager } from "../auth/event-attendance-policy.js";
 import { json } from "../utils/http.js";
 import { logAudit } from "../db/audit.js";
 import { getData } from "../db/schedule.js";
@@ -85,9 +86,9 @@ export async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/attendance/event" && request.method === "GET") {
-    requireAdmin(auth);
     const eventId = url.searchParams.get("eventId");
     if (!isPositiveInteger(eventId)) return json({ error: "Evento inválido." }, 400);
+    await requireEventAttendanceManager(env, auth.user, Number(eventId));
     const event = await env.DB.prepare("SELECT id,event_date,title FROM events WHERE id=?").bind(Number(eventId)).first();
     if (!event) return json({ error: "Evento não encontrado." }, 404);
     const closure = await env.DB.prepare("SELECT status,closed_at FROM event_attendance_closures WHERE event_id=?").bind(Number(eventId)).first();
@@ -104,7 +105,6 @@ export async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/attendance" && request.method === "POST") {
-    requireAdmin(auth);
     const body = await request.json();
     if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.userId)) {
       return json({ error: "Evento ou integrante inválido." }, 400);
@@ -116,7 +116,6 @@ export async function handleApi(request, env, url) {
   }
 
   if (url.pathname === "/api/admin/attendance/close" && request.method === "POST") {
-    requireAdmin(auth);
     const body = await request.json();
     if (!isPositiveInteger(body.eventId)) return json({ error: "Evento inválido." }, 400);
     return json(await closeAttendance(env, auth.user, Number(body.eventId)));
