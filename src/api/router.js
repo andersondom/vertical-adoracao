@@ -6,6 +6,7 @@ import { json } from "../utils/http.js";
 import { logAudit } from "../db/audit.js";
 import { getData } from "../db/schedule.js";
 import { getParticipationReport } from "../db/reports.js";
+import { saveAttendance, closeAttendance } from "../db/attendance.js";
 import { suggestTeam } from "../domain/team-suggestions.js";
 import { loginIdentityHash, isLoginBlocked, recordLoginFailure, clearLoginFailures } from "../auth/login-rate-limit.js";
 
@@ -81,6 +82,25 @@ export async function handleApi(request, env, url) {
     const month = url.searchParams.get("month");
     if (month && (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month) || Number(month.slice(0,4)) < 2000 || Number(month.slice(0,4)) > 2100)) return json({ error: "Mês inválido." }, 400);
     return json(await getData(env, auth.user, month));
+  }
+
+  if (url.pathname === "/api/admin/attendance" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId) || !isPositiveInteger(body.userId)) {
+      return json({ error: "Evento ou integrante inválido." }, 400);
+    }
+    return json(await saveAttendance(env, auth.user, {
+      eventId:Number(body.eventId), userId:Number(body.userId),
+      status:body.status, justification:body.justification, reason:body.reason
+    }));
+  }
+
+  if (url.pathname === "/api/admin/attendance/close" && request.method === "POST") {
+    requireAdmin(auth);
+    const body = await request.json();
+    if (!isPositiveInteger(body.eventId)) return json({ error: "Evento inválido." }, 400);
+    return json(await closeAttendance(env, auth.user, Number(body.eventId)));
   }
 
   if (url.pathname === "/api/reports/participation" && request.method === "GET") {
