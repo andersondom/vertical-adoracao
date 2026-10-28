@@ -1,36 +1,47 @@
-// Funções puras: compromisso e presença são conceitos distintos.
+// Cálculo puro e determinístico dos indicadores de participação.
 export function calculateParticipation(rows) {
+  const commitments = new Map();
   const events = new Set();
-  const commitments = new Set();
-  const presences = new Set();
-  const justified = new Set();
-  const unjustified = new Set();
-  const pending = new Set();
   let functions = 0;
+
   for (const row of rows) {
+    if (!['confirmed', 'reserved'].includes(row.assignment_status)) continue;
     const key = String(row.event_id) + ':' + String(row.user_id);
     events.add(row.event_id);
-    // Cada papel conta como função, mas um evento por integrante conta uma única vez.
-    if (row.assignment_status === 'confirmed' || row.assignment_status === 'reserved') {
-      functions += 1;
-      commitments.add(key);
-      if (row.closure_status !== 'closed') pending.add(key);
-      else if (row.attendance_status === 'present') presences.add(key);
-      else if (row.attendance_status === 'absent_justified') justified.add(key);
-      else if (row.attendance_status === 'absent_unjustified') unjustified.add(key);
-      else pending.add(key);
+    functions++;
+    const existing = commitments.get(key);
+    if (!existing) {
+      commitments.set(key, {
+        closed: row.closure_status === 'closed',
+        status: row.attendance_status || null
+      });
+    } else if (existing.closed !== (row.closure_status === 'closed') ||
+               existing.status !== (row.attendance_status || null)) {
+      // Dados conflitantes para um mesmo integrante/evento não são contados como presença.
+      commitments.set(key, {closed:false,status:null});
     }
   }
-  const finalized = [...commitments].filter(k => !pending.has(k));
-  const attended = finalized.filter(k => presences.has(k)).length;
+
+  let presences = 0;
+  let justifiedAbsences = 0;
+  let unjustifiedAbsences = 0;
+  let pending = 0;
+  for (const entry of commitments.values()) {
+    if (!entry.closed || !entry.status) { pending++; continue; }
+    if (entry.status === 'present') presences++;
+    else if (entry.status === 'absent_justified') justifiedAbsences++;
+    else if (entry.status === 'absent_unjustified') unjustifiedAbsences++;
+    else pending++;
+  }
+  const finalized = presences + justifiedAbsences + unjustifiedAbsences;
   return {
     events: events.size,
     commitments: commitments.size,
     functions,
-    presences: attended,
-    justifiedAbsences: finalized.filter(k => justified.has(k)).length,
-    unjustifiedAbsences: finalized.filter(k => unjustified.has(k)).length,
-    pending: pending.size,
-    attendanceRate: finalized.length ? Number((attended * 100 / finalized.length).toFixed(2)) : null
+    presences,
+    justifiedAbsences,
+    unjustifiedAbsences,
+    pending,
+    attendanceRate: finalized ? Number((presences * 100 / finalized).toFixed(2)) : null
   };
 }
