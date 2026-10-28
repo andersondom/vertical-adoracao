@@ -11,9 +11,14 @@ const run=(args)=>{
 };
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let server;
+function stopServer(child){
+ if(!child || !child.pid)return;
+ try { if(process.platform==='win32')child.kill('SIGTERM'); else process.kill(-child.pid,'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch {} }
+}
+
 async function phase(id,port){
  const config='scripts/'+id+'.wrangler.jsonc';
- server=spawn(wrangler,['wrangler','dev','--config',config,'--local','--ip','127.0.0.1','--port',String(port),'--persist-to',root],{stdio:'pipe',shell:process.platform==='win32'});
+ server=spawn(wrangler,['wrangler','dev','--config',config,'--local','--ip','127.0.0.1','--port',String(port),'--persist-to',root],{stdio:'pipe',shell:process.platform==='win32',detached:process.platform!=='win32'});
  let output='';
  server.stdout.on('data',d=>{output+=d.toString();});
  server.stderr.on('data',d=>{output+=d.toString();});
@@ -30,8 +35,8 @@ async function phase(id,port){
   console.log(id,JSON.stringify(body));
   if(!response.ok||body.ok!==true||Object.values(body.checks||{}).some(x=>x!==true))throw new Error(id+' não aprovado');
  }finally{
-  server.kill();
-  await sleep(1200);
+  stopServer(server);
+  await sleep(500);
   server=null;
  }
 }
@@ -39,7 +44,7 @@ try{
  console.log('Banco temporário:',root);
  run(['d1','migrations','apply','louvor-db','--local','--persist-to',root]);
  run(['d1','execute','louvor-db','--local','--persist-to',root,'--file','scripts/id01-fixture-local.sql']);
- for(const [id,port] of [['id01',8791],['id02',8792],['id03',8793],['id04',8794]])await phase(id,port);
- console.log('APROVADO: ID01 a ID04, D1 temporário.');
+ for(const [id,port] of [['id01',8791],['id02',8792],['id03',8793],['id04',8794],['id05',8795]])await phase(id,port);
+ console.log('APROVADO: ID01 a ID05, D1 temporário.');
 }catch(e){console.error('FALHA:',e.message);process.exitCode=1;
-}finally{if(server)server.kill();await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:1000});}
+}finally{if(server)stopServer(server);await rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:1000});}
