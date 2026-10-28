@@ -104,7 +104,7 @@ label{font-size:13px;color:#334155;display:block}.g2{grid-template-columns:repea
 <script>
 let ME=null, DATA=null;
 function currentMonth(){const p=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value;}
-async function changeScheduleMonth(month){if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))return;try{DATA=await api("/api/data?month="+encodeURIComponent(month));id("month").textContent=DATA.settings.month_label;id("scheduleMonth").value=DATA.selectedMonth;renderSchedule();if(ME.role==="admin"){renderUsers();renderSettings();renderAttendance();}}catch(e){alert(e.message);}}
+async function changeScheduleMonth(month){if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))return;try{DATA=await api("/api/data?month="+encodeURIComponent(month));id("month").textContent=DATA.settings.month_label;id("scheduleMonth").value=DATA.selectedMonth;renderSchedule();if(ME.role==="admin"){renderUsers();renderSettings();}updateAttendanceNavigation();renderAttendance();}catch(e){alert(e.message);}}
 
 async function api(path, options={}){
   const r=await fetch(path,{headers:{'content-type':'application/json',...(options.headers||{})},...options});
@@ -149,12 +149,14 @@ async function loadApp(){
   id('welcome').textContent='Olá, '+ME.name+'.';
   id('roleTag').textContent=ME.role==='admin'?'Administrador':'Integrante';
   id('topUser').textContent=ME.name;
-  if(ME.role==='admin') show('adminTabs');
+  updateAttendanceNavigation();
   renderSchedule();
   const year=DATA.selectedMonth.slice(0,4), month=DATA.selectedMonth.slice(5,7);
   id('reportStart').value=year+'-'+month+'-01';
   id('reportEnd').value=year+'-'+month+'-'+String(new Date(Number(year),Number(month),0).getDate()).padStart(2,'0');
-  if(ME.role==='admin'){renderUsers();renderSettings();renderAttendance();showView('schedule');}
+  if(ME.role==='admin'){renderUsers();renderSettings();}
+  renderAttendance();
+  if(canAccessAttendance())showView('schedule');
 }
 
 function renderSchedule(){
@@ -349,9 +351,10 @@ async function reloadData(){
   id('month').textContent=DATA.settings.month_label;
   id('scheduleMonth').value=DATA.selectedMonth;
   renderSchedule();
-  if(ME.role==='admin'){renderUsers();renderSettings();renderAttendance();}
+  if(ME.role==='admin'){renderUsers();renderSettings();}
+  updateAttendanceNavigation();renderAttendance();
 }
-function showView(v){for(const x of ['schedule','users','settings','attendance']) id(x+'View').classList.toggle('hidden',x!==v);document.querySelectorAll('#adminTabs [data-view]').forEach(b=>{const selected=b.dataset.view===v;b.classList.toggle('active',selected);b.setAttribute('aria-current',selected?'page':'false')})}
+function showView(v){if(v==='attendance'&&!canAccessAttendance())return;if((v==='users'||v==='settings')&&ME.role!=='admin')return;for(const x of ['schedule','users','settings','attendance']) id(x+'View').classList.toggle('hidden',x!==v);document.querySelectorAll('#adminTabs [data-view]').forEach(b=>{const selected=b.dataset.view===v;b.classList.toggle('active',selected);b.setAttribute('aria-current',selected?'page':'false')})}
 function id(x){return document.getElementById(x)} function val(x){return id(x).value}
 function show(x){id(x).classList.remove('hidden')} function hide(x){id(x).classList.add('hidden')}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -366,10 +369,27 @@ async function loadParticipation(){
   target.innerHTML='<div class="grid g2"><div class="avail">Compromissos: <strong>'+x.commitments+'</strong></div><div class="avail">Funções: <strong>'+x.functions+'</strong></div><div class="avail">Presenças: <strong>'+x.presences+'</strong></div><div class="avail">Pendentes: <strong>'+x.pending+'</strong></div><div class="avail">Ausências justificadas: <strong>'+x.justifiedAbsences+'</strong></div><div class="avail">Ausências não justificadas: <strong>'+x.unjustifiedAbsences+'</strong></div></div><p><strong>Taxa de presença:</strong> '+(x.attendanceRate===null?'Não calculável':x.attendanceRate.toLocaleString('pt-BR')+'%')+'</p>';
  }catch(e){target.textContent=e.message}
 }
+function leaderEventIds(){
+ if(!DATA||!ME)return new Set();
+ return new Set((DATA.teamAssignments||[]).filter(a=>Number(a.user_id)===Number(ME.id)&&Number(a.is_leader)===1&&['confirmed','reserved'].includes(a.status)).map(a=>Number(a.event_id)));
+}
+function canAccessAttendance(){return ME?.role==='admin'||leaderEventIds().size>0;}
+function updateAttendanceNavigation(){
+ const tabs=id('adminTabs');
+ const permitted=canAccessAttendance();
+ tabs.classList.toggle('hidden',!permitted);
+ for(const name of ['users','settings']){
+  const button=tabs.querySelector('[data-view="'+name+'"]');
+  if(button)button.classList.toggle('hidden',ME.role!=='admin');
+ }
+ const att=tabs.querySelector('[data-view="attendance"]');
+ if(att)att.classList.toggle('hidden',!permitted);
+ if(!permitted&&!id('attendanceView').classList.contains('hidden'))showView('schedule');
+}
 function renderAttendance(){
- if(ME.role!=='admin')return;
+ if(!canAccessAttendance()){id('attendanceView').innerHTML='';return;}
  const target=id('attendanceView');
- target.innerHTML='<div class="card"><h2>Registro de presenças</h2><p class="muted">Selecione um evento. Somente integrantes com compromisso ativo serão exibidos.</p><label>Evento<select id="attendanceEvent"><option value="">Selecione</option>'+(DATA.events||[]).map(e=>'<option value="'+Number(e.id)+'">'+esc(e.event_date+' — '+(e.title||e.day_code))+'</option>').join('')+'</select></label><br><button onclick="loadAttendanceEvent()">Abrir evento</button><div id="attendanceDetail"></div></div>';
+ target.innerHTML='<div class="card"><h2>Registro de presenças</h2><p class="muted">Selecione um evento. Somente integrantes com compromisso ativo serão exibidos.</p><label>Evento<select id="attendanceEvent"><option value="">Selecione</option>'+(DATA.events||[]).filter(e=>ME.role==='admin'||leaderEventIds().has(Number(e.id))).map(e=>'<option value="'+Number(e.id)+'">'+esc(e.event_date+' — '+(e.title||e.day_code))+'</option>').join('')+'</select></label><br><button onclick="loadAttendanceEvent()">Abrir evento</button><div id="attendanceDetail"></div></div>';
 }
 async function loadAttendanceEvent(){
  const target=id('attendanceDetail'),eventId=Number(val('attendanceEvent'));
