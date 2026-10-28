@@ -36,6 +36,8 @@ export async function closeAttendance(env,actor,eventId) {
   if(actor.role!=='admin') fail('Acesso negado.',403);
   const event=await env.DB.prepare('SELECT id FROM events WHERE id=?').bind(eventId).first();
   if(!event) fail('Evento não encontrado.',404);
+  const active=await env.DB.prepare("SELECT COUNT(DISTINCT user_id) AS total FROM team_assignments WHERE event_id=? AND status IN ('confirmed','reserved')").bind(eventId).first();
+  if (Number(active?.total||0)===0) fail('Não é possível encerrar presenças sem integrantes escalados.',409);
   const missing=await env.DB.prepare(`SELECT COUNT(DISTINCT ta.user_id) AS total FROM team_assignments ta
     LEFT JOIN event_attendance a ON a.event_id=ta.event_id AND a.user_id=ta.user_id
     WHERE ta.event_id=? AND ta.status IN ('confirmed','reserved') AND a.user_id IS NULL`).bind(eventId).first();
