@@ -32,6 +32,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Chromium logout smoke test (local Worker only)
         run: |
+          npx wrangler d1 execute louvor-db --local --command "INSERT OR REPLACE INTO sessions(id,user_id,expires_at) SELECT 'chromium-local-fixture-session',id,'2099-01-01T00:00:00.000Z' FROM users WHERE email='integrante.test@exemplo.invalid'"
           npx wrangler dev --local --ip 127.0.0.1 --port 8787 > /tmp/vertical-chromium-worker.log 2>&1 &
           WORKER_PID=$!
           trap 'kill "$WORKER_PID" 2>/dev/null || true' EXIT
