@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { saveAttendance, closeAttendance } from '../src/db/attendance.js';
 
-function fakeDatabase({ closed = false, missing = 0 } = {}) {
+function fakeDatabase({ closed = false, missing = 0, active = 1 } = {}) {
   const batches = [];
   const DB = {
     prepare(sql) {
@@ -17,6 +17,7 @@ function fakeDatabase({ closed = false, missing = 0 } = {}) {
           if (sql.includes('FROM team_assignments') && sql.includes('LIMIT 1')) return { ok: 1 };
           if (sql.includes('FROM event_attendance WHERE')) return null;
           if (sql.includes('FROM event_attendance_closures')) return closed ? { status: 'closed' } : null;
+          if (sql.includes('COUNT(DISTINCT user_id)')) return { total: active };
           if (sql.includes('COUNT(DISTINCT')) return { total: missing };
           throw new Error('Consulta inesperada: ' + sql);
         }
@@ -64,4 +65,10 @@ test('fechamento e auditoria são gravados juntos', async () => {
   assert.equal(batches.length,1);
   assert.equal(batches[0].length,2);
   assert.match(batches[0][1].sql,/audit_log/);
+});
+
+test('não encerra evento sem integrantes escalados',async()=>{
+ const {env,batches}=fakeDatabase({active:0});
+ await assert.rejects(closeAttendance(env,{id:1,role:'admin'},10),e=>e.status===409);
+ assert.equal(batches.length,0);
 });
