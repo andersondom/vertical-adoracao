@@ -23,3 +23,29 @@ test('ausências justificadas são separadas',()=>{
 test('sem compromissos não gera taxa artificial',()=>{
  assert.equal(calculateParticipation([]).attendanceRate,null);
 });
+
+test('escalações propostas não entram nas métricas',()=>{
+ const result=calculateParticipation([{...row(1),assignment_status:'proposed'}]);
+ assert.equal(result.events,0);
+ assert.equal(result.commitments,0);
+ assert.equal(result.functions,0);
+ assert.equal(result.attendanceRate,null);
+});
+test('eventos distintos com presença e ausência calculam 50%',()=>{
+ const result=calculateParticipation([
+  row(1),
+  {...row(1,'closed','absent_unjustified'),event_id:2}
+ ]);
+ assert.equal(result.events,2);
+ assert.equal(result.presences,1);
+ assert.equal(result.unjustifiedAbsences,1);
+ assert.equal(result.attendanceRate,50);
+});
+test('compromissos ainda pendentes não reduzem taxa de frequência',()=>{
+ const result=calculateParticipation([
+  row(1),
+  {...row(1,'pending',null),event_id:2}
+ ]);
+ assert.equal(result.pending,1);
+ assert.equal(result.attendanceRate,100);
+});
