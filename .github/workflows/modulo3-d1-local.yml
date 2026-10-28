@@ -1,0 +1,34 @@
+name: Integracao D1 local - Modulo 3
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/modulo3-presencas-indicadores
+    paths:
+      - 'src/**'
+      - 'migrations/**'
+      - 'scripts/id0*'
+      - '.github/workflows/modulo3-d1-local.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'migrations/**'
+      - 'scripts/id0*'
+      - '.github/workflows/modulo3-d1-local.yml'
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Testes unitarios
+        run: npm test
+      - name: Integracao real D1 isolado ID01-ID04
+        run: node scripts/run-d1-integration.mjs
