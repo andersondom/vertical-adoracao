@@ -18,6 +18,8 @@ const otherToken = "api-d1-other-member-session";
 const other = sql("SELECT id FROM users WHERE email='admin.test@exemplo.invalid'")[0];
 assert.ok(other?.id && other.id !== member.id);
 const where = `event_id=${event.id} AND user_id=${member.id} AND role_id=${role.id}`;
+const originalRole = sql(`SELECT 1 AS present FROM member_roles WHERE user_id=${member.id} AND role_id=${role.id}`).length > 0;
+const originalAvailability = sql(`SELECT available FROM availability WHERE event_id=${event.id} AND user_id=${member.id}`)[0];
 async function confirm(value, session = token) {
   return fetch(base+"/api/team-confirmation", {
     method:"POST",
@@ -66,8 +68,12 @@ try {
 } finally {
   sql(`DELETE FROM team_assignments WHERE ${where}`);
   sql(`DELETE FROM audit_log WHERE actor_user_id=${member.id} AND action='TEAM_CONFIRMATION' AND details LIKE '%"eventId":${event.id}%' AND details LIKE '%"roleId":${role.id}%'`);
-  sql(`DELETE FROM member_roles WHERE user_id=${member.id} AND role_id=${role.id}`);
-  sql(`DELETE FROM availability WHERE event_id=${event.id} AND user_id=${member.id}`);
+  if (!originalRole) sql(`DELETE FROM member_roles WHERE user_id=${member.id} AND role_id=${role.id}`);
+  if (originalAvailability) {
+    sql(`UPDATE availability SET available=${Number(originalAvailability.available)} WHERE event_id=${event.id} AND user_id=${member.id}`);
+  } else {
+    sql(`DELETE FROM availability WHERE event_id=${event.id} AND user_id=${member.id}`);
+  }
   sql(`DELETE FROM sessions WHERE id='${token}'`);
   sql(`DELETE FROM sessions WHERE id='${otherToken}'`);
 }
