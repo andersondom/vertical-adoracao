@@ -30,6 +30,13 @@ try {
   sql(`INSERT OR REPLACE INTO sessions(id,user_id,expires_at) VALUES('${otherToken}',${other.id},'2099-01-01T00:00:00.000Z')`);
   sql(`INSERT INTO team_assignments(event_id,user_id,role_id,status,is_leader) VALUES(${event.id},${member.id},${role.id},'proposed',0) ON CONFLICT(event_id,user_id,role_id) DO UPDATE SET status='proposed',is_leader=0`);
   assert.equal((await confirm(true,"nonexistent-fictional-session")).status,401,"unauthenticated request must be rejected");
+  const malformed = await fetch(base+"/api/team-confirmation",{
+    method:"POST",
+    headers:{Origin:base,Cookie:`louvor_session=${token}`,"Content-Type":"application/json"},
+    body:JSON.stringify({eventId:event.id,roleId:role.id,confirm:"yes"})
+  });
+  assert.equal(malformed.status,400,"invalid confirmation payload must be rejected");
+  assert.equal(sql(`SELECT status FROM team_assignments WHERE ${where}`)[0].status,"proposed");
   assert.equal((await confirm(true,otherToken)).status,404,"other user cannot confirm assignment");
   assert.equal((await confirm(false,otherToken)).status,404,"other user cannot decline assignment");
   assert.equal((await confirm(true)).status,409,"proposed assignment cannot be confirmed");
