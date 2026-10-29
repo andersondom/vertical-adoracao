@@ -56,8 +56,23 @@ try {
     "audit event must persist in local D1");
   query(`DELETE FROM audit_log WHERE actor_user_id=${user.id} AND action='${auditAction}'`);
 
-  console.log("D1 local: session revocation, availability withdrawal/restoration, user isolation and audit persistence verified.");
+  // Exercise the persisted assignment lifecycle using the seeded fictional event/member.
+  const role = query("SELECT id FROM ministry_roles WHERE active=1 ORDER BY id LIMIT 1")[0];
+  assert.ok(role?.id, "an active ministry role is required in local migrations");
+  query(`INSERT INTO team_assignments(event_id,user_id,role_id,status,is_leader)
+    VALUES(${event.id},${user.id},${role.id},'proposed',0)
+    ON CONFLICT(event_id,user_id,role_id) DO UPDATE SET status='proposed',is_leader=0`);
+  assert.equal(query(`SELECT status FROM team_assignments WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`)[0].status,"proposed");
+  query(`UPDATE team_assignments SET status='reserved' WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`);
+  assert.equal(query(`SELECT status FROM team_assignments WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`)[0].status,"reserved");
+  query(`UPDATE team_assignments SET status='confirmed' WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`);
+  assert.equal(query(`SELECT status FROM team_assignments WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`)[0].status,"confirmed");
+  query(`UPDATE team_assignments SET status='declined' WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`);
+  assert.equal(query(`SELECT status FROM team_assignments WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`)[0].status,"declined");
+  query(`DELETE FROM team_assignments WHERE event_id=${event.id} AND user_id=${user.id} AND role_id=${role.id}`);
+  console.log("D1 local: session, availability, audit and assignment lifecycle persistence verified.");
 } finally {
   query(`DELETE FROM sessions WHERE id='${token}'`);
+  query(`DELETE FROM team_assignments WHERE user_id=${user.id} AND event_id IN (SELECT id FROM events WHERE event_date='2027-01-10')`);
   query(`DELETE FROM audit_log WHERE actor_user_id=${user.id} AND action='D1_INTEGRATION_TEST'`);
 }
