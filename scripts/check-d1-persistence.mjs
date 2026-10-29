@@ -42,7 +42,22 @@ try {
   assert.equal(query(`SELECT COUNT(*) AS n FROM availability WHERE event_id=${event.id} AND user_id=${other.id}`)[0].n, 0,
     "availability must not leak into another fictional user");
 
-  console.log("D1 local: session create/revoke/replay prevention, availability persistence and user isolation verified.");
+  // Exercise a real availability state transition without touching any remote database.
+  query(`DELETE FROM availability WHERE event_id=${event.id} AND user_id=${user.id}`);
+  assert.equal(query(`SELECT COUNT(*) AS n FROM availability WHERE event_id=${event.id} AND user_id=${user.id}`)[0].n, 0,
+    "withdrawn availability must no longer exist");
+  query(`INSERT INTO availability(event_id,user_id,available) VALUES(${event.id},${user.id},1)`);
+  assert.equal(query(`SELECT available FROM availability WHERE event_id=${event.id} AND user_id=${user.id}`)[0].available, 1,
+    "availability must be restorable after withdrawal");
+
+  const auditAction = "D1_INTEGRATION_TEST";
+  query(`INSERT INTO audit_log(actor_user_id,action,details) VALUES(${user.id},'${auditAction}','fictional local-only transition')`);
+  assert.equal(query(`SELECT COUNT(*) AS n FROM audit_log WHERE actor_user_id=${user.id} AND action='${auditAction}'`)[0].n, 1,
+    "audit event must persist in local D1");
+  query(`DELETE FROM audit_log WHERE actor_user_id=${user.id} AND action='${auditAction}'`);
+
+  console.log("D1 local: session revocation, availability withdrawal/restoration, user isolation and audit persistence verified.");
 } finally {
   query(`DELETE FROM sessions WHERE id='${token}'`);
+  query(`DELETE FROM audit_log WHERE actor_user_id=${user.id} AND action='D1_INTEGRATION_TEST'`);
 }
