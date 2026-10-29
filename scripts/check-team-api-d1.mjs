@@ -47,8 +47,14 @@ try {
   assert.equal(sql(`SELECT status FROM team_assignments WHERE ${where}`)[0].status,"confirmed");
   assert.equal((await confirm(false,otherToken)).status,404,"other user cannot revoke confirmed assignment");
   assert.equal(sql(`SELECT status FROM team_assignments WHERE ${where}`)[0].status,"confirmed");
+  // Revoked availability must block a subsequent confirmation, with no mutation.
+  sql(`UPDATE team_assignments SET status='reserved' WHERE ${where}`);
+  sql(`UPDATE availability SET available=0 WHERE event_id=${event.id} AND user_id=${member.id}`);
+  assert.equal((await confirm(true)).status,409,"revoked availability blocks confirmation");
+  assert.equal(sql(`SELECT status FROM team_assignments WHERE ${where}`)[0].status,"reserved");
+  sql(`UPDATE availability SET available=1 WHERE event_id=${event.id} AND user_id=${member.id}`);
   assert.ok(sql(`SELECT COUNT(*) AS n FROM audit_log WHERE actor_user_id=${member.id} AND action='TEAM_CONFIRMATION' AND details LIKE '%"eventId":${event.id}%' AND details LIKE '%"roleId":${role.id}%'`)[0].n>=1);
-  console.log("Real local D1 + Worker API: proposed/declined transitions, authorization and audit verified.");
+  console.log("Real local D1 + Worker API: ownership, transitions, eligibility and audit verified.");
 } finally {
   sql(`DELETE FROM team_assignments WHERE ${where}`);
   sql(`DELETE FROM sessions WHERE id='${token}'`);
