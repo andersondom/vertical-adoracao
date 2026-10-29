@@ -65,6 +65,9 @@ try {
   console.log("Real local D1 + Worker API: ownership, transitions, eligibility and audit verified.");
 } finally {
   sql(`DELETE FROM team_assignments WHERE ${where}`);
+  sql(`DELETE FROM audit_log WHERE actor_user_id=${member.id} AND action='TEAM_CONFIRMATION' AND details LIKE '%"eventId":${event.id}%' AND details LIKE '%"roleId":${role.id}%'`);
+  sql(`DELETE FROM member_roles WHERE user_id=${member.id} AND role_id=${role.id}`);
+  sql(`DELETE FROM availability WHERE event_id=${event.id} AND user_id=${member.id}`);
   sql(`DELETE FROM sessions WHERE id='${token}'`);
   sql(`DELETE FROM sessions WHERE id='${otherToken}'`);
 }
