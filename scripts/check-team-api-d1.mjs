@@ -32,6 +32,13 @@ try {
   assert.equal(sql(`SELECT status FROM team_assignments WHERE ${where}`)[0].status,"declined");
   assert.equal((await confirm(true)).status,409,"declined assignment cannot be confirmed");
   assert.equal(sql(`SELECT status FROM team_assignments WHERE ${where}`)[0].status,"declined");
+  // Confirm a reserved assignment only after eligibility and availability are present.
+  sql(`INSERT OR IGNORE INTO member_roles(user_id,role_id) VALUES(${member.id},${role.id})`);
+  sql(`INSERT INTO availability(event_id,user_id,available) VALUES(${event.id},${member.id},1)
+    ON CONFLICT(event_id,user_id) DO UPDATE SET available=1`);
+  sql(`UPDATE team_assignments SET status='reserved' WHERE ${where}`);
+  assert.equal((await confirm(true)).status,200,"eligible member can confirm reserved assignment");
+  assert.equal(sql(`SELECT status FROM team_assignments WHERE ${where}`)[0].status,"confirmed");
   assert.ok(sql(`SELECT COUNT(*) AS n FROM audit_log WHERE actor_user_id=${member.id} AND action='TEAM_CONFIRMATION' AND details LIKE '%"eventId":${event.id}%' AND details LIKE '%"roleId":${role.id}%'`)[0].n>=1);
   console.log("Real local D1 + Worker API: proposed/declined transitions, authorization and audit verified.");
 } finally {
