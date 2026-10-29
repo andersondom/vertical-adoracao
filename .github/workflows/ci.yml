@@ -46,3 +46,4 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8787/login > /dev/null
           node scripts/check-logout-chromium.mjs
+          RUN_D1_INTEGRATION=1 node scripts/check-team-api-d1.mjs
