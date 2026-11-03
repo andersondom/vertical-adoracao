@@ -92,6 +92,9 @@ export async function handleApi(request, env, url) {
     if (!isPositiveInteger(body.eventId)) {
       return json({ error: "Evento inválido." }, 400);
     }
+    if (typeof body.available !== "boolean") {
+      return json({ error: "Disponibilidade inválida." }, 400);
+    }
 
     const eventId = Number(body.eventId);
     const available = body.available ? 1 : 0;
