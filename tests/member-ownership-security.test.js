@@ -190,3 +190,11 @@ test("availability withdrawal is blocked for reserved or confirmed assignments",
   assert.deepEqual(check.args, [3, 7]);
   assert.equal(DB.calls.some(c => /DELETE FROM availability|INSERT INTO audit_log/.test(c.sql)), false);
 });
+
+
+test("member cannot withdraw availability while submission window is closed", async () => {
+  const DB = fakeDb({ availabilityOpen: 0 });
+  const response = await post("/api/availability", { eventId: 3, available: false }, DB);
+  assert.equal(response.status, 403);
+  assert.equal(DB.calls.some(c => /DELETE FROM availability|INSERT INTO availability|INSERT INTO audit_log/.test(c.sql)), false);
+});
