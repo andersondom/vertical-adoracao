@@ -142,3 +142,28 @@ test("member cannot confirm when availability is no longer valid", async () => {
   assert.equal(response.status, 409);
   assert.equal(DB.calls.some(c => c.sql.includes("UPDATE team_assignments")), false);
 });
+
+
+for (const available of ["false", "true", 0, 1, null]) {
+  test(`availability rejects non-boolean value ${JSON.stringify(available)} without mutation`, async () => {
+    const DB = fakeDb();
+    const response = await post("/api/availability", { eventId: 3, available }, DB);
+    assert.equal(response.status, 400);
+    assert.equal(DB.calls.some(c => /INSERT INTO availability|DELETE FROM availability|INSERT INTO audit_log/.test(c.sql)), false);
+  });
+}
+
+test("availability rejects missing boolean without mutation", async () => {
+  const DB = fakeDb();
+  const response = await post("/api/availability", { eventId: 3 }, DB);
+  assert.equal(response.status, 400);
+  assert.equal(DB.calls.some(c => /INSERT INTO availability|DELETE FROM availability|INSERT INTO audit_log/.test(c.sql)), false);
+});
+
+test("availability accepts explicit true and updates the authenticated member", async () => {
+  const DB = fakeDb();
+  const response = await post("/api/availability", { eventId: 3, available: true }, DB);
+  assert.equal(response.status, 200);
+  const mutation = DB.calls.find(c => c.sql.includes("INSERT INTO availability"));
+  assert.deepEqual(mutation.args.slice(0,2), [3,7]);
+});
