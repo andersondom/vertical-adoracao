@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
 
-function fakeDb({ availabilityOpen = 1, assignment = null, eligibility = null } = {}) {
+function fakeDb({ availabilityOpen = 1, assignment = null, eligibility = null, reservedAssignments = 0 } = {}) {
   const calls = [];
   return {
     calls,
@@ -21,7 +21,7 @@ function fakeDb({ availabilityOpen = 1, assignment = null, eligibility = null } 
               if (sql.includes("AS member_active") && sql.includes("AS role_active")) return eligibility;
               if (sql.includes("SELECT id FROM events")) return { id: args[0] };
               if (sql.includes("SELECT id,active FROM users")) return { id: args[0], active: 1 };
-              if (sql.includes("SELECT COUNT(*) AS total FROM team_assignments")) return { total: 0 };
+              if (sql.includes("SELECT COUNT(*) AS total FROM team_assignments")) return { total: reservedAssignments };
               throw new Error("Unexpected query: " + sql);
             },
             async run() {
@@ -179,4 +179,14 @@ test("availability accepts explicit false and withdraws only authenticated membe
   const mutation = DB.calls.find(c => c.sql.includes("DELETE FROM availability"));
   assert.deepEqual(mutation.args, [3, 7]);
   assert.ok(DB.calls.some(c => c.sql.includes("INSERT INTO audit_log")));
+});
+
+
+test("availability withdrawal is blocked for reserved or confirmed assignments", async () => {
+  const DB = fakeDb({ reservedAssignments: 1 });
+  const response = await post("/api/availability", { eventId: 3, available: false }, DB);
+  assert.equal(response.status, 409);
+  const check = DB.calls.find(c => c.sql.includes("SELECT COUNT(*) AS total FROM team_assignments"));
+  assert.deepEqual(check.args, [3, 7]);
+  assert.equal(DB.calls.some(c => /DELETE FROM availability|INSERT INTO audit_log/.test(c.sql)), false);
 });
