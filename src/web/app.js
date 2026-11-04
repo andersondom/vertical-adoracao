@@ -184,7 +184,7 @@ function renderSchedule(){
       const waiting=team.filter(x=>x.status==='reserved').length;
       const proposed=team.filter(x=>x.status==='proposed').length;
       const slots=(DATA.requirements||[]).filter(x=>Number(x.event_id)===Number(e.id)).reduce((sum,x)=>sum+Number(x.slots||0),0);
-      const remaining=Math.max(0,slots-confirmed);
+      const remaining=(DATA.requirements||[]).filter(x=>Number(x.event_id)===Number(e.id)).reduce((sum,req)=>sum+Math.max(0,Number(req.slots||0)-team.filter(x=>Number(x.role_id)===Number(req.role_id)&&x.status==='confirmed').length),0);
       html+='<div class="avail"><strong>'+esc(e.event_date)+'</strong><div>Confirmados: '+confirmed+' | Aguardando: '+waiting+' | Propostos: '+proposed+'</div><div class="muted">'+(slots?'Vagas configuradas: '+slots+' | Ainda não confirmadas: '+remaining:'Sem quantidade de vagas configurada')+'</div></div>';
     }
     html+='</div></div>';
