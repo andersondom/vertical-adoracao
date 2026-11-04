@@ -227,7 +227,7 @@ function copyConfirmedTeamSchedule(){
       lines.push('• '+(person?.name||'Integrante')+' — '+(role?.label||'Função')+(x.is_leader?' (liderança)':''));
     }
   }
-  const text=lines.join('\n');
+  const text=lines.join('\\n');
   if(!navigator.clipboard?.writeText){alert('Cópia indisponível neste navegador. Use a opção de impressão.');return;}
   navigator.clipboard.writeText(text).then(()=>alert('Escala confirmada copiada. Cole no grupo para divulgar.')).catch(()=>alert('Não foi possível copiar. Use a opção de impressão.'));
 }
