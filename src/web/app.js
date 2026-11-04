@@ -176,7 +176,19 @@ function renderSchedule(){
   }
   html+='</div>';
   if(ME.role==='admin'){
-    html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p><button class="smallbtn" onclick="printTeamSchedule()">Imprimir equipes / salvar em PDF</button> <button class="smallbtn alt" onclick="copyConfirmedTeamSchedule()">Copiar escala confirmada</button>';
+    html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p><button class="smallbtn" onclick="printTeamSchedule()">Imprimir equipes / salvar em PDF</button> <button class="smallbtn alt" onclick="copyConfirmedTeamSchedule()">Copiar escala confirmada</button> <button class="smallbtn alt" onclick="copyPendingTeamReport()">Copiar pendências</button>';
+    html+='<div class="avail"><strong>Visão geral da confirmação</strong><div class="requirement-grid">';
+    for(const e of DATA.events){
+      const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
+      const confirmed=team.filter(x=>x.status==='confirmed').length;
+      const waiting=team.filter(x=>x.status==='reserved').length;
+      const proposed=team.filter(x=>x.status==='proposed').length;
+      const slots=(DATA.requirements||[]).filter(x=>Number(x.event_id)===Number(e.id)).reduce((sum,x)=>sum+Number(x.slots||0),0);
+      const remaining=(DATA.requirements||[]).filter(x=>Number(x.event_id)===Number(e.id)).reduce((sum,req)=>sum+Math.max(0,Number(req.slots||0)-team.filter(x=>Number(x.role_id)===Number(req.role_id)&&x.status==='confirmed').length),0);
+      const status=slots===0?'Configurar formação':remaining===0?'Formação confirmada':waiting>0?'Aguardando integrantes':proposed>0?'Aguardando aprovação':'Formação incompleta';
+      html+='<div class="avail"><strong>'+esc(e.event_date)+'</strong> — <span class="tag">'+status+'</span><div>Confirmados: '+confirmed+' | Aguardando: '+waiting+' | Propostos: '+proposed+'</div><div class="muted">'+(slots?'Vagas configuradas: '+slots+' | Ainda não confirmadas: '+remaining:'Sem quantidade de vagas configurada')+'</div></div>';
+    }
+    html+='</div></div>';
     for(const e of DATA.events){
       const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
       html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.filter(x=>x.status!=='declined').length} integrante(s) em escalação <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
@@ -230,6 +242,36 @@ function copyConfirmedTeamSchedule(){
   const text=lines.join('\\n');
   if(!navigator.clipboard?.writeText){alert('Cópia indisponível neste navegador. Use a opção de impressão.');return;}
   navigator.clipboard.writeText(text).then(()=>alert('Escala confirmada copiada. Cole no grupo para divulgar.')).catch(()=>alert('Não foi possível copiar. Use a opção de impressão.'));
+}
+
+function copyPendingTeamReport(){
+  if(ME.role!=='admin')return;
+  const lines=['🎶 Pendências da escala — '+(DATA.settings.month_label||'Mês selecionado')];
+  let pending=0;
+  for(const e of DATA.events){
+    const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
+    const requirements=(DATA.requirements||[]).filter(x=>Number(x.event_id)===Number(e.id)&&Number(x.slots)>0);
+    const issues=[];
+    if(!requirements.length)issues.push('Formação ainda não configurada');
+    for(const req of requirements){
+      const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(req.role_id));
+      const confirmed=team.filter(x=>Number(x.role_id)===Number(req.role_id)&&x.status==='confirmed').length;
+      const missing=Math.max(0,Number(req.slots)-confirmed);
+      if(missing)issues.push((role?.label||'Função')+': '+missing+' vaga(s) sem confirmação');
+    }
+    for(const x of team.filter(x=>x.status==='reserved'||x.status==='proposed')){
+      const person=(DATA.members||[]).find(m=>Number(m.id)===Number(x.user_id));
+      const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
+      issues.push((x.status==='reserved'?'Aguardando integrante: ':'Aprovação pendente: ')+(person?.name||'Integrante')+' — '+(role?.label||'Função'));
+    }
+    if(!issues.length)continue;
+    pending+=issues.length;
+    lines.push('',e.event_date+' — '+(e.title||e.day_code||'Culto'));
+    for(const issue of issues)lines.push('• '+issue);
+  }
+  if(!pending){alert('Nenhuma pendência encontrada para o mês.');return;}
+  if(!navigator.clipboard?.writeText){alert('Cópia indisponível neste navegador.');return;}
+  navigator.clipboard.writeText(lines.join(String.fromCharCode(10))).then(()=>alert('Relatório de pendências copiado.')).catch(()=>alert('Não foi possível copiar o relatório.'));
 }
 
 function printTeamSchedule(){

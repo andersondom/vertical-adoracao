@@ -27,3 +27,25 @@ test("exportação de equipes exige confirmação e oferece impressão em PDF",(
   assert.match(html,/popup\.print\(\)/);
   assert.match(html,/Imprimir equipes \/ salvar em PDF/);
 });
+
+
+test("painel de confirmação usa dados já carregados sem novas consultas", () => {
+  const html = appHtml();
+  assert.match(html, /Visão geral da confirmação/);
+  assert.match(html, /Ainda não confirmadas/);
+  assert.match(html, /Sem quantidade de vagas configurada/);
+  for (const label of ['Configurar formação','Formação confirmada','Aguardando integrantes','Aguardando aprovação','Formação incompleta']) {
+    assert.ok(html.includes(label), `Status ausente: ${label}`);
+  }
+  assert.match(html, /function copyConfirmedTeamSchedule\(/);
+});
+
+
+test("administrador pode copiar relatório de pendências sem nova API", () => {
+  const html=appHtml();
+  assert.match(html, /onclick="copyPendingTeamReport\(\)"/);
+  assert.match(html, /function copyPendingTeamReport\(\)/);
+  assert.match(html, /Formação ainda não configurada/);
+  assert.match(html, /Aguardando integrante:/);
+  assert.match(html, /Aprovação pendente:/);
+});
