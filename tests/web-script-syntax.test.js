@@ -49,3 +49,12 @@ test("administrador pode copiar relatório de pendências sem nova API", () => {
   assert.match(html, /Aguardando integrante:/);
   assert.match(html, /Aprovação pendente:/);
 });
+
+
+test("publicação alerta sobre vagas pendentes antes de copiar ou imprimir",()=>{
+ const html=appHtml();
+ assert.match(html,/function schedulePublicationWarning\(/);
+ assert.match(html,/Deseja divulgar somente as confirmações existentes/);
+ assert.match(html,/if\(!schedulePublicationWarning\(\)\)return;/);
+ assert.equal((html.match(/if\(!schedulePublicationWarning\(\)\)return;/g)||[]).length,2);
+});
