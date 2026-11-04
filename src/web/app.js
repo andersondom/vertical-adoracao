@@ -176,7 +176,7 @@ function renderSchedule(){
   }
   html+='</div>';
   if(ME.role==='admin'){
-    html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p><button class="smallbtn" onclick="printTeamSchedule()">Imprimir equipes / salvar em PDF</button>';
+    html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p><button class="smallbtn" onclick="printTeamSchedule()">Imprimir equipes / salvar em PDF</button> <button class="smallbtn alt" onclick="copyConfirmedTeamSchedule()">Copiar escala confirmada</button>';
     for(const e of DATA.events){
       const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
       html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.filter(x=>x.status!=='declined').length} integrante(s) em escalação <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
@@ -211,6 +211,25 @@ function renderSchedule(){
     }
   }
   id('scheduleView').innerHTML=html;
+}
+
+function copyConfirmedTeamSchedule(){
+  const confirmed=(DATA.teamAssignments||[]).filter(x=>x.status==='confirmed');
+  if(!confirmed.length){alert('Não há integrantes confirmados para compartilhar.');return;}
+  const lines=['🎶 Ministério de Louvor — '+DATA.settings.month_label];
+  for(const e of DATA.events){
+    const members=confirmed.filter(x=>Number(x.event_id)===Number(e.id));
+    if(!members.length)continue;
+    lines.push('',e.event_date+' — '+(e.title||e.day_code||'Culto'));
+    for(const x of members){
+      const person=(DATA.members||[]).find(m=>Number(m.id)===Number(x.user_id));
+      const role=(DATA.roles||[]).find(r=>Number(r.id)===Number(x.role_id));
+      lines.push('• '+(person?.name||'Integrante')+' — '+(role?.label||'Função')+(x.is_leader?' (liderança)':''));
+    }
+  }
+  const text=lines.join('\\n');
+  if(!navigator.clipboard?.writeText){alert('Cópia indisponível neste navegador. Use a opção de impressão.');return;}
+  navigator.clipboard.writeText(text).then(()=>alert('Escala confirmada copiada. Cole no grupo para divulgar.')).catch(()=>alert('Não foi possível copiar. Use a opção de impressão.'));
 }
 
 function printTeamSchedule(){
