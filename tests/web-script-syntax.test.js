@@ -39,3 +39,13 @@ test("painel de confirmação usa dados já carregados sem novas consultas", () 
   }
   assert.match(html, /function copyConfirmedTeamSchedule\(/);
 });
+
+
+test("administrador pode copiar relatório de pendências sem nova API", () => {
+  const html=appHtml();
+  assert.match(html, /onclick="copyPendingTeamReport\(\)"/);
+  assert.match(html, /function copyPendingTeamReport\(\)/);
+  assert.match(html, /Formação ainda não configurada/);
+  assert.match(html, /Aguardando integrante:/);
+  assert.match(html, /Aprovação pendente:/);
+});
