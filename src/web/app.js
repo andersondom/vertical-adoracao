@@ -229,7 +229,7 @@ function schedulePublicationWarning(){
   const issues=[];
   for(const e of DATA.events){
     const requirements=(DATA.requirements||[]).filter(r=>Number(r.event_id)===Number(e.id)&&Number(r.slots)>0);
-    if(!requirements.length)continue;
+    if(!requirements.length){issues.push(e.event_date+': formação não configurada');continue;}
     const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id)&&x.status==='confirmed');
     const missing=requirements.reduce((sum,r)=>sum+Math.max(0,Number(r.slots)-team.filter(x=>Number(x.role_id)===Number(r.role_id)).length),0);
     if(missing)issues.push(e.event_date+': '+missing+' vaga(s) pendente(s)');
