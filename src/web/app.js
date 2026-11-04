@@ -177,6 +177,17 @@ function renderSchedule(){
   html+='</div>';
   if(ME.role==='admin'){
     html+='<div class="card"><h2>Montagem de equipes</h2><p class="muted">As sugestões são preliminares. O administrador precisa aprovar a reserva e cada integrante deve confirmar.</p><button class="smallbtn" onclick="printTeamSchedule()">Imprimir equipes / salvar em PDF</button> <button class="smallbtn alt" onclick="copyConfirmedTeamSchedule()">Copiar escala confirmada</button>';
+    html+='<div class="avail"><strong>Visão geral da confirmação</strong><div class="requirement-grid">';
+    for(const e of DATA.events){
+      const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
+      const confirmed=team.filter(x=>x.status==='confirmed').length;
+      const waiting=team.filter(x=>x.status==='reserved').length;
+      const proposed=team.filter(x=>x.status==='proposed').length;
+      const slots=(DATA.requirements||[]).filter(x=>Number(x.event_id)===Number(e.id)).reduce((sum,x)=>sum+Number(x.slots||0),0);
+      const remaining=Math.max(0,slots-confirmed);
+      html+='<div class="avail"><strong>'+esc(e.event_date)+'</strong><div>Confirmados: '+confirmed+' | Aguardando: '+waiting+' | Propostos: '+proposed+'</div><div class="muted">'+(slots?'Vagas configuradas: '+slots+' | Ainda não confirmadas: '+remaining:'Sem quantidade de vagas configurada')+'</div></div>';
+    }
+    html+='</div></div>';
     for(const e of DATA.events){
       const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id));
       html+=\`<div class="avail"><strong>\${esc(e.event_date)}</strong> — \${team.filter(x=>x.status!=='declined').length} integrante(s) em escalação <button class="smallbtn" onclick="previewTeam(\${e.id})">Sugerir equipe</button><div id="preview\${e.id}"></div></div>\`;
