@@ -30,6 +30,19 @@ try {
     } finally {window.confirm=original;}
   });
   assert.equal(publication,false,"incomplete schedule must permit canceling publication");
+  const unconfigured=await page.evaluate(()=>{
+    const saved=DATA;
+    const original=window.confirm;
+    let warning="";
+    window.confirm=message=>{warning=message;return false;};
+    try {
+      DATA={...saved,events:[{id:778,event_date:"2027-01-17",day_code:"D"}],requirements:[],teamAssignments:[]};
+      return {allowed:schedulePublicationWarning(),warning};
+    } finally {DATA=saved;window.confirm=original;}
+  });
+  assert.equal(unconfigured.allowed,false,"unconfigured event must allow cancellation");
+  assert.match(unconfigured.warning,/formação não configurada/);
+
   assert.deepEqual(errors,[],"browser must not report uncaught errors");
   console.log("Chromium admin UI: authenticated month, readiness, share actions and publication cancellation verified.");
 } finally {
