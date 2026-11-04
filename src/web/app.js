@@ -225,9 +225,23 @@ function renderSchedule(){
   id('scheduleView').innerHTML=html;
 }
 
+function schedulePublicationWarning(){
+  const issues=[];
+  for(const e of DATA.events){
+    const requirements=(DATA.requirements||[]).filter(r=>Number(r.event_id)===Number(e.id)&&Number(r.slots)>0);
+    if(!requirements.length)continue;
+    const team=(DATA.teamAssignments||[]).filter(x=>Number(x.event_id)===Number(e.id)&&x.status==='confirmed');
+    const missing=requirements.reduce((sum,r)=>sum+Math.max(0,Number(r.slots)-team.filter(x=>Number(x.role_id)===Number(r.role_id)).length),0);
+    if(missing)issues.push(e.event_date+': '+missing+' vaga(s) pendente(s)');
+  }
+  if(!issues.length)return true;
+  return confirm('Existem vagas ainda não confirmadas:\\n'+issues.join('\\n')+'\\n\\nDeseja divulgar somente as confirmações existentes?');
+}
+
 function copyConfirmedTeamSchedule(){
   const confirmed=(DATA.teamAssignments||[]).filter(x=>x.status==='confirmed');
   if(!confirmed.length){alert('Não há integrantes confirmados para compartilhar.');return;}
+  if(!schedulePublicationWarning())return;
   const lines=['🎶 Ministério de Louvor — '+DATA.settings.month_label];
   for(const e of DATA.events){
     const members=confirmed.filter(x=>Number(x.event_id)===Number(e.id));
@@ -277,6 +291,7 @@ function copyPendingTeamReport(){
 function printTeamSchedule(){
   const confirmed=(DATA.teamAssignments||[]).filter(x=>x.status==='confirmed');
   if(!confirmed.length){alert('Não há integrantes confirmados para impressão.');return;}
+  if(!schedulePublicationWarning())return;
   const sections=DATA.events.map(e=>{
     const members=confirmed.filter(x=>Number(x.event_id)===Number(e.id));
     if(!members.length)return '';
