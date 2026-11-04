@@ -27,3 +27,12 @@ test("exportação de equipes exige confirmação e oferece impressão em PDF",(
   assert.match(html,/popup\.print\(\)/);
   assert.match(html,/Imprimir equipes \/ salvar em PDF/);
 });
+
+
+test("painel de confirmação usa dados já carregados sem novas consultas", () => {
+  const html = appHtml();
+  assert.match(html, /Visão geral da confirmação/);
+  assert.match(html, /Ainda não confirmadas/);
+  assert.match(html, /Sem quantidade de vagas configurada/);
+  assert.match(html, /function copyConfirmedTeamSchedule\(/);
+});
