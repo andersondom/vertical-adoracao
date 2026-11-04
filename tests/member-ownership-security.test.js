@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
 
-function fakeDb({ availabilityOpen = 1, assignment = null, eligibility = null, reservedAssignments = 0 } = {}) {
+function fakeDb({ availabilityOpen = 1, assignment = null, eligibility = null, reservedAssignments = 0, conflictingLeader = false } = {}) {
   const calls = [];
   return {
     calls,
@@ -22,6 +22,7 @@ function fakeDb({ availabilityOpen = 1, assignment = null, eligibility = null, r
               if (sql.includes("SELECT id FROM events")) return { id: args[0] };
               if (sql.includes("SELECT id,active FROM users")) return { id: args[0], active: 1 };
               if (sql.includes("SELECT COUNT(*) AS total FROM team_assignments")) return { total: reservedAssignments };
+              if (sql.includes("SELECT 1 AS ok FROM team_assignments")) return conflictingLeader ? { ok: 1 } : null;
               throw new Error("Unexpected query: " + sql);
             },
             async run() {
@@ -197,4 +198,18 @@ test("member cannot withdraw availability while submission window is closed", as
   const response = await post("/api/availability", { eventId: 3, available: false }, DB);
   assert.equal(response.status, 403);
   assert.equal(DB.calls.some(c => /DELETE FROM availability|INSERT INTO availability|INSERT INTO audit_log/.test(c.sql)), false);
+});
+
+
+test("member cannot confirm leadership already reserved for another assignment", async () => {
+  const DB = fakeDb({
+    assignment: { status: "reserved", is_leader: 1 },
+    eligibility: { member_active: 1, role_active: 1, eligible: 1, available: 1 },
+    conflictingLeader: true
+  });
+  const response = await post("/api/team-confirmation", { eventId: 3, roleId: 2, confirm: true }, DB);
+  assert.equal(response.status, 409);
+  const check = DB.calls.find(c => c.sql.includes("SELECT 1 AS ok FROM team_assignments"));
+  assert.deepEqual(check.args, [3, 7, 2]);
+  assert.equal(DB.calls.some(c => /UPDATE team_assignments|INSERT INTO audit_log/.test(c.sql)), false);
 });
