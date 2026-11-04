@@ -23,8 +23,8 @@ export async function getData(env, user, requestedMonth = null) {
   ).bind(month.key + '-01', nextKey + '-01').all();
 
   const ownAvailability = await env.DB.prepare(
-    "SELECT event_id,available FROM availability WHERE user_id=?"
-  ).bind(user.id).all();
+    "SELECT event_id,available FROM availability WHERE user_id=? AND event_id IN (SELECT id FROM events WHERE event_date >= ? AND event_date < ?)"
+  ).bind(user.id,month.key + '-01',nextKey + '-01').all();
 
   let members = [];
   let allAvailability = [];
@@ -38,9 +38,9 @@ export async function getData(env, user, requestedMonth = null) {
       `SELECT av.event_id,av.user_id,av.available,u.name
        FROM availability av
        JOIN users u ON u.id=av.user_id
-       WHERE av.available=1
+       WHERE av.available=1 AND av.event_id IN (SELECT id FROM events WHERE event_date >= ? AND event_date < ?)
        ORDER BY u.name`
-    ).all()).results;
+    ).bind(month.key + '-01',nextKey + '-01').all()).results;
   }
 
   const roles = (await env.DB.prepare(
@@ -57,15 +57,15 @@ export async function getData(env, user, requestedMonth = null) {
       "SELECT mr.user_id,mr.role_id FROM member_roles mr JOIN users u ON u.id=mr.user_id ORDER BY mr.user_id,mr.role_id"
     ).all()).results;
     requirements = (await env.DB.prepare(
-      "SELECT event_id,role_id,slots FROM event_role_requirements ORDER BY event_id,role_id"
-    ).all()).results;
+      "SELECT event_id,role_id,slots FROM event_role_requirements WHERE event_id IN (SELECT id FROM events WHERE event_date >= ? AND event_date < ?) ORDER BY event_id,role_id"
+    ).bind(month.key + '-01',nextKey + '-01').all()).results;
     teamAssignments = (await env.DB.prepare(
-      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments ORDER BY event_id,user_id,role_id"
-    ).all()).results;
+      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments WHERE event_id IN (SELECT id FROM events WHERE event_date >= ? AND event_date < ?) ORDER BY event_id,user_id,role_id"
+    ).bind(month.key + '-01',nextKey + '-01').all()).results;
   } else {
     teamAssignments = (await env.DB.prepare(
-      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments WHERE user_id=? ORDER BY event_id,role_id"
-    ).bind(user.id).all()).results;
+      "SELECT event_id,user_id,role_id,status,is_leader FROM team_assignments WHERE user_id=? AND event_id IN (SELECT id FROM events WHERE event_date >= ? AND event_date < ?) ORDER BY event_id,role_id"
+    ).bind(user.id,month.key + '-01',nextKey + '-01').all()).results;
   }
 
   return {
