@@ -34,5 +34,8 @@ test("painel de confirmação usa dados já carregados sem novas consultas", () 
   assert.match(html, /Visão geral da confirmação/);
   assert.match(html, /Ainda não confirmadas/);
   assert.match(html, /Sem quantidade de vagas configurada/);
+  for (const label of ['Configurar formação','Formação confirmada','Aguardando integrantes','Aguardando aprovação','Formação incompleta']) {
+    assert.ok(html.includes(label), `Status ausente: ${label}`);
+  }
   assert.match(html, /function copyConfirmedTeamSchedule\(/);
 });
